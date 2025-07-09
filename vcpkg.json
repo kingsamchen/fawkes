@@ -1,0 +1,7 @@
+{
+    "name": "fawkes",
+    "version": "0.1.0",
+    "dependencies": [
+        "doctest"
+    ]
+}
