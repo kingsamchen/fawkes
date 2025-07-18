@@ -19,6 +19,7 @@ function(fawkes_clang_tidy_on_build TARGET)
     set_target_properties(${TARGET} PROPERTIES
       VS_GLOBAL_RunCodeAnalysis true
       VS_GLOBAL_EnableClangTidyCodeAnalysis true
+      VS_GLOBAL_EnableMicrosoftCodeAnalysis false
     )
   else()
     set(CLANG_TIDY_COMMAND

@@ -22,6 +22,14 @@ target_include_directories(fawkes
 )
 
 target_link_libraries(fawkes
+  PRIVATE
+    fmt::fmt
+    spdlog::spdlog
+
+  PUBLIC
+    Boost::asio
+    Boost::beast
+    Threads::Threads
 )
 
 fawkes_common_compile_configs(fawkes)
@@ -57,6 +65,7 @@ target_link_libraries(fawkes_test
   PRIVATE
     doctest::doctest
     fawkes::fawkes
+    spdlog::spdlog # TODO: Resolve pch issue
 )
 
 target_include_directories(fawkes_test
@@ -73,6 +82,6 @@ fawkes_use_sanitizers(fawkes_test)
 get_target_property(fawkes_test_FILES fawkes_test SOURCES)
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${fawkes_test_FILES})
 
-target_precompile_headers(fawkes_test REUSE_FROM fawkes::fawkes)
+target_precompile_headers(fawkes_test REUSE_FROM fawkes)
 
 add_test(NAME FawkesTest COMMAND fawkes_test)

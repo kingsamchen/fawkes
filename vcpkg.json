@@ -2,6 +2,11 @@
     "name": "fawkes",
     "version": "0.1.0",
     "dependencies": [
-        "doctest"
+        "boost-asio",
+        "boost-beast",
+        "doctest",
+        "fmt",
+        "gflags",
+        "spdlog"
     ]
 }

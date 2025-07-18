@@ -24,7 +24,7 @@ if(FAWKES_NOT_SUBPROJECT)
   set(ROOT_DIR ${CMAKE_SOURCE_DIR})
 endif()
 
-# Add options below.
+option(FAWKES_BUILD_EXAMPLES "If enabled, build examples" OFF)
 
 set(FAWKES_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(FAWKES_CMAKE_DIR ${FAWKES_DIR}/cmake)
@@ -32,6 +32,7 @@ set(FAWKES_CMAKE_DIR ${FAWKES_DIR}/cmake)
 include(CTest)
 
 message(STATUS "fawkes GENERATOR = " ${CMAKE_GENERATOR})
+message(STATUS "FAWKES_BUILD_EXAMPLES = " ${FAWKES_BUILD_EXAMPLES})
 
 # Output configurations.
 get_property(MULTICONF_GENERATOR GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
@@ -60,6 +61,22 @@ include(${FAWKES_CMAKE_DIR}/pch.cmake)
 include(${FAWKES_CMAKE_DIR}/clang_tidy.cmake)
 include(${FAWKES_CMAKE_DIR}/sanitizer.cmake)
 
+find_package(boost_asio CONFIG REQUIRED)
+find_package(boost_beast CONFIG REQUIRED)
 find_package(doctest CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
+find_package(Threads REQUIRED)
+
+target_compile_definitions(Boost::asio
+  INTERFACE
+    $<$<BOOL:${WIN32}>:
+      _WIN32_WINNT=0x0601
+    >
+)
 
 add_subdirectory(fawkes)
+
+if(FAWKES_BUILD_EXAMPLES)
+  add_subdirectory(examples)
+endif()

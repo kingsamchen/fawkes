@@ -35,7 +35,7 @@
             "binaryDir": "${sourceDir}/out/${presetName}",
             "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
             "cacheVariables": {
-                "FAWKES_USE_SANITIZERS": "ASAN",
+                "FAWKES_USE_SANITIZERS": "",
                 "FAWKES_CLANG_TIDY_ON_BUILD": "ON"
             },
             "condition": {
@@ -50,6 +50,7 @@
             "displayName": "Windows Dev",
             "description": "Dev build on Windows",
             "cacheVariables": {
+                "FAWKES_USE_SANITIZERS": "ASAN",
                 "FAWKES_CLANG_TIDY_ON_BUILD": "OFF"
             }
         }
