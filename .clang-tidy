@@ -30,7 +30,7 @@ Checks: >
   -readability-identifier-length,
 
 WarningsAsErrors: '*'
-HeaderFilterRegex: '()\/.*\.h$'
+HeaderFilterRegex: '(fawkes|examples)\/.*\.hpp$'
 
 CheckOptions:
   - key: cppcoreguidelines-macro-usage.CheckCapsOnly
@@ -41,6 +41,8 @@ CheckOptions:
     value: 1
   - key: modernize-avoid-bind.PermissiveParameterList
     value: 1
+  - key: performance-unnecessary-value-param.AllowedTypes
+    value: exception_ptr;
   - key: readability-implicit-bool-conversion.AllowIntegerConditions
     value: 1
   - key: readability-implicit-bool-conversion.AllowPointerConditions
