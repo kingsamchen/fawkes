@@ -1,0 +1,55 @@
+name: Build and test on Linux with GCC
+
+on:
+  pull_request:
+    paths-ignore:
+      - '.gitignore'
+      - 'LICENSE'
+      - 'README.md'
+      - '.githooks/**'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+
+    strategy:
+      matrix:
+        cxx: [g++-11, g++-12, g++-13]
+        include:
+          - cxx: g++-11
+            install: sudo apt install -y g++-11
+          - cxx: g++-12
+            install: sudo apt install -y g++-12
+          - cxx: g++-13
+            install: sudo apt install -y g++-13
+
+    env:
+      VCPKG_ROOT: "/usr/local/share/vcpkg"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add repositories for newer GCC
+        run: |
+          sudo apt-add-repository ppa:ubuntu-toolchain-r/test
+        if: ${{ matrix.cxx == 'g++-13' }}
+
+      - name: Add Ubuntu mirrors
+        run: |
+          # Github Actions caching proxy is at times unreliable
+          # see https://github.com/actions/runner-images/issues/7048
+          printf 'http://azure.archive.ubuntu.com/ubuntu\tpriority:1\n' | sudo tee /etc/apt/mirrors.txt
+          curl http://mirrors.ubuntu.com/mirrors.txt | sudo tee --append /etc/apt/mirrors.txt
+          sudo sed -i 's~http://azure.archive.ubuntu.com/ubuntu/~mirror+file:/etc/apt/mirrors.txt~' /etc/apt/sources.list
+
+      - name: Create Build Environment
+        run: |
+          sudo apt update
+          ${{matrix.install}}
+          sudo apt install -y ninja-build
+
+      - name: Build and test
+        env:
+          CXX: ${{matrix.cxx}}
+        run: |
+          cmake --workflow --preset linux-release

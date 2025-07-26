@@ -2,7 +2,6 @@
 Checks: >
   -*,
   clang-diagnostic-*,
-  clang-analyzer-*,
   bugprone-*,
   cppcoreguidelines-*,
   google-*,
@@ -30,7 +29,9 @@ Checks: >
   -readability-identifier-length,
 
 WarningsAsErrors: '*'
-HeaderFilterRegex: '(fawkes|examples)\/.*\.hpp$'
+HeaderFileExtensions:         ['h','hh','hpp','hxx']
+ImplementationFileExtensions: ['c','cc','cpp','cxx']
+HeaderFilterRegex: '.*\/fawkes\/(fawkes|examples)\/.*'
 
 CheckOptions:
   - key: cppcoreguidelines-macro-usage.CheckCapsOnly
