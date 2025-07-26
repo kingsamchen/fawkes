@@ -8,5 +8,10 @@
         "fmt",
         "gflags",
         "spdlog"
-    ]
+    ],
+    "vcpkg-configuration": {
+        "overlay-ports": [
+            "./build/vcpkg-overlay"
+        ]
+    }
 }
