@@ -7,6 +7,7 @@
 #include <functional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <boost/asio/as_tuple.hpp>
 #include <boost/asio/co_spawn.hpp>
@@ -22,25 +23,13 @@
 #include <spdlog/spdlog.h>
 
 namespace fawkes {
+namespace {
 
 namespace http = beast::http;
 
-namespace {
-
 template<typename Body, typename Allocator>
 http::message_generator handle_request( // NOLINTNEXTLINE(*-rvalue-reference-param-not-moved)
-        http::request<Body, http::basic_fields<Allocator>>&& req) {
-    const auto bad_request =
-            [&req](std::string_view why) {
-                http::response<http::string_body> resp{http::status::bad_request, req.version()};
-                resp.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-                resp.set(http::field::content_type, "text/html");
-                resp.keep_alive(req.keep_alive());
-                resp.body() = std::string(why);
-                resp.prepare_payload();
-                return resp;
-            };
-
+        http::request<Body, http::basic_fields<Allocator>>&& req, const router& router) {
     const auto not_found =
             [&req](std::string_view why) {
                 http::response<http::string_body> resp{http::status::not_found, req.version()};
@@ -52,19 +41,21 @@ http::message_generator handle_request( // NOLINTNEXTLINE(*-rvalue-reference-par
                 return resp;
             };
 
-    if (req.method() != http::verb::get) {
-        return bad_request("Unsupported HTTP-method");
+    std::vector<param> params;
+    params.resize(4);
+    const auto* handler = router.locate_route(req.method(), req.target(), params);
+    if (!handler) {
+        return not_found("Unknown resource");
     }
 
-    if (req.target() != "/ping") {
-        return not_found("Unknown path");
-    }
+    response http_resp;
+    (*handler)(request{}, http_resp);
 
     http::response<http::string_body> resp{http::status::ok, req.version()};
     resp.set(http::field::server, BOOST_BEAST_VERSION_STRING);
     resp.set(http::field::content_type, "text/plain");
     resp.keep_alive(req.keep_alive());
-    resp.body() = "Pong";
+    resp.body() = http_resp.body;
     resp.prepare_payload();
     return resp;
 }
@@ -102,15 +93,14 @@ asio::awaitable<void> server::do_listen() {
     }
 }
 
-// static
-asio::awaitable<void> server::serve_session(beast::tcp_stream stream) {
+asio::awaitable<void> server::serve_session(beast::tcp_stream stream) const {
     beast::flat_buffer buf;
 
     for (;;) {
         http::request<http::string_body> req;
         co_await http::async_read(stream, buf, req);
 
-        auto resp = handle_request(std::move(req));
+        auto resp = handle_request(std::move(req), router_);
         const bool keep_alive = resp.keep_alive();
 
         co_await beast::async_write(stream, std::move(resp));

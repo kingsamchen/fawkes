@@ -14,6 +14,9 @@ int main() {
     try {
         boost::asio::io_context io_ctx{1};
         fawkes::server svc(io_ctx);
+        svc.do_get("/ping", [](const fawkes::request&, fawkes::response& resp) {
+            resp.body = "Pong!";
+        });
         svc.listen_and_serve("0.0.0.0", static_cast<std::uint16_t>(FLAGS_port));
         io_ctx.run();
     } catch (const std::exception& ex) {

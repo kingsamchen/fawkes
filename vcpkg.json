@@ -5,6 +5,7 @@
         "boost-asio",
         "boost-beast",
         "doctest",
+        "esl",
         "fmt",
         "gflags",
         "spdlog"
