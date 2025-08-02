@@ -61,13 +61,13 @@ include(${FAWKES_CMAKE_DIR}/pch.cmake)
 include(${FAWKES_CMAKE_DIR}/clang_tidy.cmake)
 include(${FAWKES_CMAKE_DIR}/sanitizer.cmake)
 
-find_package(Threads REQUIRED)
-
 find_package(boost_asio CONFIG REQUIRED)
 find_package(boost_beast CONFIG REQUIRED)
 find_package(doctest CONFIG REQUIRED)
+find_package(esl CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+find_package(Threads REQUIRED)
 
 target_compile_definitions(Boost::asio
   INTERFACE
@@ -75,6 +75,10 @@ target_compile_definitions(Boost::asio
       _WIN32_WINNT=0x0601
     >
 )
+
+if(BUILD_TESTING)
+  add_subdirectory(test_utils)
+endif()
 
 add_subdirectory(fawkes)
 

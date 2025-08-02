@@ -5,8 +5,13 @@ add_library(fawkes::fawkes ALIAS fawkes)
 
 target_sources(fawkes
   PRIVATE
+    request.hpp
+    router.cpp
+    router.hpp
     server.cpp
     server.hpp
+    tree.cpp
+    tree.hpp
 
   $<$<BOOL:${WIN32}>:
   >
@@ -23,6 +28,7 @@ target_include_directories(fawkes
 
 target_link_libraries(fawkes
   PRIVATE
+    esl::esl
     fmt::fmt
     spdlog::spdlog
 
@@ -59,12 +65,15 @@ add_executable(fawkes_test)
 target_sources(fawkes_test
   PRIVATE
     test_main.cpp
+
+    tree_test.cpp
 )
 
 target_link_libraries(fawkes_test
   PRIVATE
     doctest::doctest
     fawkes::fawkes
+    fawkes::test_utils
     spdlog::spdlog # TODO: Resolve pch issue
 )
 
