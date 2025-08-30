@@ -4,6 +4,8 @@
     "dependencies": [
         "boost-asio",
         "boost-beast",
+        "boost-json",
+        "boost-url",
         "doctest",
         "esl",
         "fmt",

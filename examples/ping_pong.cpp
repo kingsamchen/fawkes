@@ -14,10 +14,15 @@ int main() {
     try {
         boost::asio::io_context io_ctx{1};
         fawkes::server svc(io_ctx);
-        svc.do_get("/ping", [](const fawkes::request&, fawkes::response& resp) {
-            resp.body = "Pong!";
+        svc.do_get("/ping", [](const fawkes::request& req, fawkes::response& resp) {
+            auto q = req.queries().get("q");
+            if (q.has_value()) {
+                spdlog::info("q={}", *q);
+            }
+            resp.mutable_body() = "Pong!";
         });
         svc.listen_and_serve("0.0.0.0", static_cast<std::uint16_t>(FLAGS_port));
+        spdlog::info("ping-pong server is listenning at {}", FLAGS_port);
         io_ctx.run();
     } catch (const std::exception& ex) {
         spdlog::error("Unexpected error: {}", ex.what());

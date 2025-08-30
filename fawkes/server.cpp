@@ -7,7 +7,6 @@
 #include <functional>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include <boost/asio/as_tuple.hpp>
 #include <boost/asio/co_spawn.hpp>
@@ -18,46 +17,69 @@
 #include <boost/beast/http/error.hpp>
 #include <boost/beast/http/read.hpp>
 #include <boost/beast/version.hpp>
+#include <boost/json/object.hpp>
+#include <boost/json/serialize.hpp>
 #include <boost/system/system_error.hpp>
 #include <fmt/ostream.h>
 #include <spdlog/spdlog.h>
+
+#include "fawkes/errors.hpp"
 
 namespace fawkes {
 namespace {
 
 namespace http = beast::http;
+namespace json = boost::json;
 
-template<typename Body, typename Allocator>
-http::message_generator handle_request( // NOLINTNEXTLINE(*-rvalue-reference-param-not-moved)
-        http::request<Body, http::basic_fields<Allocator>>&& req, const router& router) {
-    const auto not_found =
-            [&req](std::string_view why) {
-                http::response<http::string_body> resp{http::status::not_found, req.version()};
-                resp.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-                resp.set(http::field::content_type, "text/html");
-                resp.keep_alive(req.keep_alive());
-                resp.body() = std::string(why);
-                resp.prepare_payload();
-                return resp;
-            };
-
-    std::vector<param> params;
-    params.resize(4);
-    const auto* handler = router.locate_route(req.method(), req.target(), params);
-    if (!handler) {
-        return not_found("Unknown resource");
-    }
-
-    response http_resp;
-    (*handler)(request{}, http_resp);
-
-    http::response<http::string_body> resp{http::status::ok, req.version()};
+http::response<http::string_body> make_error_response(unsigned int http_version,
+                                                      bool keep_alive,
+                                                      http::status status_code,
+                                                      std::string&& body) {
+    http::response<http::string_body> resp{status_code, http_version};
     resp.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-    resp.set(http::field::content_type, "text/plain");
-    resp.keep_alive(req.keep_alive());
-    resp.body() = http_resp.body;
+    resp.set(http::field::content_type, "application/json");
+    resp.keep_alive(keep_alive);
+    resp.body() = std::move(body);
     resp.prepare_payload();
     return resp;
+}
+
+http::message_generator handle_request(http::request<http::string_body>&& req,
+                                       const router& router) {
+    const auto http_ver = req.version();
+    const auto keep_alive = req.keep_alive();
+    try {
+        request fwk_req(std::move(req));
+
+        const auto* handler = router.locate_route(fwk_req.header().method(),
+                                                  fwk_req.path(),
+                                                  fwk_req.mutable_params());
+        if (!handler) {
+            throw http_error(http::status::not_found, "Unknown resource");
+        }
+
+        response faw_resp;
+        (*handler)(fwk_req, faw_resp);
+
+        auto& resp_impl = faw_resp.as_mutable_impl();
+        resp_impl.version(http_ver);
+        resp_impl.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+        resp_impl.keep_alive(keep_alive);
+        resp_impl.prepare_payload();
+
+        return std::move(resp_impl);
+    } catch (const http_error& ex) {
+        json::object err{{"message", ex.what()}};
+        if (const auto& ec = ex.error_code(); ec.has_value()) {
+            err["code"] = *ec;
+        }
+        const json::object body{{"error", std::move(err)}};
+        return make_error_response(http_ver, keep_alive, ex.status_code(), json::serialize(body));
+    } catch (const std::exception& ex) {
+        const json::object body{{"error", json::object{{"message", ex.what()}}}};
+        return make_error_response(http_ver, keep_alive, http::status::internal_server_error,
+                                   json::serialize(body));
+    }
 }
 
 } // namespace
@@ -96,6 +118,8 @@ asio::awaitable<void> server::do_listen() {
 asio::awaitable<void> server::serve_session(beast::tcp_stream stream) const {
     beast::flat_buffer buf;
 
+    // TODO(KC): handle http async_read/async_write exception ?
+    // can stream still be usable in this case?
     for (;;) {
         http::request<http::string_body> req;
         co_await http::async_read(stream, buf, req);
