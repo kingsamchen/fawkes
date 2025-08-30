@@ -34,7 +34,7 @@ jobs:
       - name: Install required tools
         run: |
           sudo apt update
-          sudo apt install -y clang-format-20 clang-tidy-20 ninja-build
+          sudo apt install -y clang-20 clang-format-20 clang-tidy-20 ninja-build
           sudo pip3 install cpplint
 
       - name: Run cpplint
@@ -47,6 +47,10 @@ jobs:
             xargs clang-format-20 --dry-run -Werror
 
       - name: Run clang-tidy
+        env:
+          CC: clang-20
+          CXX: clang++-20
         run: |
-          cmake --preset linux-release -DFAWKES_USE_SANITIZERS="" -DFAWKES_BUILD_EXAMPLES=ON
+          cmake --preset linux-release -DFAWKES_USE_SANITIZERS="" -DFAWKES_BUILD_EXAMPLES=ON \
+            -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON -DCMAKE_CXX_SCAN_FOR_MODULES=OFF
           run-clang-tidy-20 -p out/linux-release -source-filter '.*\/fawkes\/(fawkes|examples)\/.*'

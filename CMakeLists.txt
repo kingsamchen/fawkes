@@ -61,8 +61,10 @@ include(${FAWKES_CMAKE_DIR}/pch.cmake)
 include(${FAWKES_CMAKE_DIR}/clang_tidy.cmake)
 include(${FAWKES_CMAKE_DIR}/sanitizer.cmake)
 
-find_package(boost_asio CONFIG REQUIRED)
-find_package(boost_beast CONFIG REQUIRED)
+find_package(Boost CONFIG REQUIRED COMPONENTS asio)
+find_package(Boost CONFIG REQUIRED COMPONENTS beast)
+find_package(Boost CONFIG REQUIRED COMPONENTS json)
+find_package(Boost CONFIG REQUIRED COMPONENTS url)
 find_package(doctest CONFIG REQUIRED)
 find_package(esl CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
@@ -74,6 +76,12 @@ target_compile_definitions(Boost::asio
     $<$<BOOL:${WIN32}>:
       _WIN32_WINNT=0x0601
     >
+)
+
+# Fix gcc-13 regression.
+target_compile_options(Boost::json
+  INTERFACE
+    $<$<CXX_COMPILER_ID:GNU>:-Wno-stringop-overflow>
 )
 
 if(BUILD_TESTING)

@@ -18,19 +18,13 @@
 #include <esl/utility.h>
 #include <fmt/format.h>
 
+#include "fawkes/path_params.hpp"
 #include "fawkes/request.hpp"
 #include "fawkes/response.hpp"
 
 namespace fawkes {
 
 using route_handler_t = std::function<void(const request&, response&)>;
-
-struct param {
-    std::string_view key;
-    std::string_view value;
-
-    friend bool operator==(param lhs, param rhs) noexcept = default;
-};
 
 namespace detail {
 
@@ -109,7 +103,7 @@ public:
 
     // Throws `std::runtime_error` if node type is invalid, this is an internal error,
     // and in most cases is caused by implementation bugs.
-    const route_handler_t* locate(std::string_view path, std::vector<param>& params) const;
+    const route_handler_t* locate(std::string_view path, path_params& ps) const;
 
 private:
     // Find the target node to insert the path.

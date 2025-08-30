@@ -7,13 +7,16 @@
 #include <algorithm>
 #include <cassert>
 #include <memory>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
-#include <vector>
+
+#include "fawkes/path_params.hpp"
 
 namespace fawkes {
 
-const route_handler_t* node::locate(std::string_view path, std::vector<param>& params) const {
+const route_handler_t* node::locate(std::string_view path, path_params& ps) const {
     if (path.size() == path_.size()) {
         return handler_ ? &handler_ : nullptr;
     }
@@ -28,15 +31,13 @@ const route_handler_t* node::locate(std::string_view path, std::vector<param>& p
                 return nullptr;
             }
 
-            return children_[pos]->locate(path, params);
+            return children_[pos]->locate(path, ps);
         }
 
         auto& child = *children_.front();
         if (child.type_ == type::param) {
             const auto param_end = path.find('/');
-
-            params.push_back(param{.key = std::string_view{child.path_}.substr(1),
-                                   .value = path.substr(0, param_end)});
+            ps.add(std::string_view{child.path_}.substr(1), path.substr(0, param_end));
 
             if (param_end == std::string_view::npos) {
                 return child.handler_ ? &child.handler_ : nullptr;
@@ -44,11 +45,10 @@ const route_handler_t* node::locate(std::string_view path, std::vector<param>& p
 
             // Go deeper.
             if (!child.children_.empty()) {
-                return child.children_[0]->locate(path.substr(param_end), params);
+                return child.children_[0]->locate(path.substr(param_end), ps);
             }
         } else if (child.type_ == type::catch_all) {
-            params.push_back(param{.key = std::string_view{child.path_}.substr(2),
-                                   .value = path});
+            ps.add(std::string_view{child.path_}.substr(2), path);
             return &child.handler_;
         } else [[unlikely]] {
             throw std::runtime_error(fmt::format("node type '{}' of route '{}' is invalid",

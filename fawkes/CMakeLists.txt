@@ -5,6 +5,10 @@ add_library(fawkes::fawkes ALIAS fawkes)
 
 target_sources(fawkes
   PRIVATE
+    errors.hpp
+    path_params.hpp
+    query_params.hpp
+    request.cpp
     request.hpp
     router.cpp
     router.hpp
@@ -35,6 +39,8 @@ target_link_libraries(fawkes
   PUBLIC
     Boost::asio
     Boost::beast
+    Boost::json
+    Boost::url
     Threads::Threads
 )
 
@@ -66,6 +72,7 @@ target_sources(fawkes_test
   PRIVATE
     test_main.cpp
 
+    request_test.cpp
     tree_test.cpp
 )
 

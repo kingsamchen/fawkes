@@ -2,14 +2,15 @@
 // This file is subject to the terms of license that can be found
 // in the LICENSE file.
 
+#include <initializer_list>
 #include <string>
-#include <utility>
-#include <vector>
 
 #include <doctest/doctest.h>
 #include <fmt/format.h>
 
+#include "fawkes/path_params.hpp"
 #include "fawkes/tree.hpp"
+
 #include "test_utils/stringification.hpp" // IWYU pragma: keep
 
 namespace fawkes {
@@ -53,12 +54,12 @@ private:
 } // namespace fawkes
 
 template<>
-struct fmt::formatter<fawkes::param> {
+struct fmt::formatter<fawkes::detail::param> {
     constexpr auto parse(auto& ctx) {
         return ctx.begin();
     }
 
-    auto format(const fawkes::param& p, auto& ctx) const {
+    auto format(const fawkes::detail::param& p, auto& ctx) const {
         return fmt::format_to(ctx.out(), "(key={}, value={})", p.key, p.value);
     }
 };
@@ -74,7 +75,7 @@ struct locate_request {
     std::string test_path;
     bool handler_found;
     std::string hit_route;
-    std::vector<fawkes::param> params;
+    fawkes::path_params params;
 
     locate_request(std::string_view test,
                    bool found)
@@ -83,8 +84,12 @@ struct locate_request {
     locate_request(std::string_view test,
                    bool found,
                    std::string_view route,
-                   std::vector<fawkes::param> ps)
-        : test_path(test), handler_found(found), hit_route(route), params(std::move(ps)) {}
+                   std::initializer_list<fawkes::detail::param> ps)
+        : test_path(test), handler_found(found), hit_route(route) {
+        for (auto par : ps) {
+            params.add(par.key, par.value);
+        }
+    }
 };
 
 TEST_SUITE_BEGIN("Router");
@@ -508,7 +513,7 @@ TEST_CASE("Locate non-wild path") {
         {"/doc/", true},
     };
 
-    std::vector<fawkes::param> params;
+    fawkes::path_params params;
     for (const auto& req : requests) {
         const auto* handler = tree.locate(req.test_path, params);
         CHECK_EQ(handler != nullptr, req.handler_found);
@@ -584,7 +589,7 @@ TEST_CASE("Locate wildcard path") {
 
     for (const auto& req : requests) {
         INFO("Test path=", req.test_path);
-        std::vector<fawkes::param> params;
+        fawkes::path_params params;
         const auto* handler = tree.locate(req.test_path, params);
         CHECK_EQ(req.params, params);
         CHECK_EQ(handler != nullptr, req.handler_found);

@@ -6,11 +6,11 @@
 
 #include <string_view>
 #include <utility>
-#include <vector>
 
 #include <boost/beast/http/verb.hpp>
 #include <boost/unordered/unordered_flat_map.hpp>
 
+#include "fawkes/path_params.hpp"
 #include "fawkes/tree.hpp"
 
 namespace fawkes {
@@ -24,14 +24,15 @@ public:
         routes_[verb].add_route(path, std::move(handler));
     }
 
+    // `path` must outlive `ps`.
     const route_handler_t* locate_route(beast::http::verb verb, std::string_view path,
-                                        std::vector<param>& params) const {
+                                        path_params& ps) const {
         const auto tree_it = routes_.find(verb);
         if (tree_it == routes_.end()) {
             return nullptr;
         }
 
-        return tree_it->second.locate(path, params);
+        return tree_it->second.locate(path, ps);
     }
 
     // TODO(KC): support middleware.
