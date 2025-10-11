@@ -518,7 +518,7 @@ TEST_CASE("Locate non-wild path") {
         const auto* handler = tree.locate(req.test_path, params);
         CHECK_EQ(handler != nullptr, req.handler_found);
         if (handler) {
-            const fawkes::request fake_req;
+            fawkes::request fake_req;
             fawkes::response fake_resp;
             (*handler)(fake_req, fake_resp);
             CHECK_EQ(handler_path, req.test_path);
@@ -594,7 +594,7 @@ TEST_CASE("Locate wildcard path") {
         CHECK_EQ(req.params, params);
         CHECK_EQ(handler != nullptr, req.handler_found);
         if (handler) {
-            const fawkes::request fake_req;
+            fawkes::request fake_req;
             fawkes::response fake_resp;
             (*handler)(fake_req, fake_resp);
             CHECK_EQ(handler_path, req.hit_route);

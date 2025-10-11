@@ -34,7 +34,7 @@ function run_cpplint_check() {
         exit 0
     fi
 
-    changed_files=$(git diff --cached --name-only | grep -iE '\.(cpp|h)$')
+    changed_files=$(git diff --cached --name-only | grep -iE '\.(cpp|cc|c|hpp|hh|h)$')
     if [ -n "${changed_files}" ]; then
         cpplint --quiet ${changed_files} ||
         if [ "$?" ]; then
