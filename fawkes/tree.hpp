@@ -24,7 +24,7 @@
 
 namespace fawkes {
 
-using route_handler_t = std::function<void(const request&, response&)>;
+using route_handler_t = std::function<void(request&, response&)>;
 
 namespace detail {
 

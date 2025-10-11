@@ -6,6 +6,8 @@
 #include <gflags/gflags.h>
 #include <spdlog/spdlog.h>
 
+#include "fawkes/request.hpp"
+#include "fawkes/response.hpp"
 #include "fawkes/server.hpp"
 
 DEFINE_uint32(port, 9876, "Port number to listen");

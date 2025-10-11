@@ -6,6 +6,7 @@ add_library(fawkes::fawkes ALIAS fawkes)
 target_sources(fawkes
   PRIVATE
     errors.hpp
+    middleware.hpp
     path_params.hpp
     query_params.hpp
     request.cpp
@@ -73,6 +74,7 @@ target_sources(fawkes_test
     test_main.cpp
 
     request_test.cpp
+    router_test.cpp
     tree_test.cpp
 )
 
