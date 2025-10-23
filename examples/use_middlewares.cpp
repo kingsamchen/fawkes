@@ -60,14 +60,13 @@ int main() {
         svc.get_router().use(log_access{});
 
         // Per-route middlewares.
-        svc.do_get(
-                "/now",
-                [](const fawkes::request& req, fawkes::response& resp) {
-                    esl::ignore_unused(req);
-                    auto tp = std::chrono::system_clock::now();
-                    resp.mutable_body() = fmt::format("{}", tp);
-                },
-                fawkes::middlewares::use(tracking_id{}));
+        svc.do_get("/now",
+                   fawkes::middlewares::use(tracking_id{}),
+                   [](const fawkes::request& req, fawkes::response& resp) {
+                       esl::ignore_unused(req);
+                       auto tp = std::chrono::system_clock::now();
+                       resp.mutable_body() = fmt::format("{}", tp);
+                   });
 
         svc.do_get("/healthcheck", [](const fawkes::request& req, fawkes::response& resp) {
             esl::ignore_unused(req);

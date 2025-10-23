@@ -29,15 +29,15 @@ public:
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H>
     void add_route(beast::http::verb verb, std::string_view path, H&& handler) {
-        add_route(verb, path, std::forward<H>(handler), {});
+        add_route(verb, path, {}, std::forward<H>(handler));
     }
 
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H, is_middleware... Mws>
     void add_route(beast::http::verb verb,
                    std::string_view path,
-                   H&& handler,
-                   std::tuple<Mws...>&& middlewares) {
+                   std::tuple<Mws...>&& middlewares,
+                   H&& handler) {
         route_handler_t route_handler =
                 [this,
                  mws = std::move(middlewares),
