@@ -40,8 +40,8 @@ public:
 
         if (prio != node_.priority_) {
             throw std::runtime_error(
-                    fmt::format("Priority of node mismatch; path={}\n EXPECT={} ACTUAL={}",
-                                node_.path_, prio, node_.priority_));
+                fmt::format("Priority of node mismatch; path={}\n EXPECT={} ACTUAL={}",
+                            node_.path_, prio, node_.priority_));
         }
 
         return prio;
@@ -351,17 +351,17 @@ TEST_CASE("Wildcard conflict error message") {
     SUBCASE("case-2") {
         tree.add_route("/who/are/*you", fake_handler());
         CHECK_THROWS_WITH_AS(
-                tree.add_route("/who/are/foo", fake_handler()),
-                render_err_msg("/foo", "/who/are/foo", "/*you", "/who/are/*you").c_str(),
-                std::invalid_argument);
+            tree.add_route("/who/are/foo", fake_handler()),
+            render_err_msg("/foo", "/who/are/foo", "/*you", "/who/are/*you").c_str(),
+            std::invalid_argument);
         CHECK_THROWS_WITH_AS(
-                tree.add_route("/who/are/foo/", fake_handler()),
-                render_err_msg("/foo/", "/who/are/foo/", "/*you", "/who/are/*you").c_str(),
-                std::invalid_argument);
+            tree.add_route("/who/are/foo/", fake_handler()),
+            render_err_msg("/foo/", "/who/are/foo/", "/*you", "/who/are/*you").c_str(),
+            std::invalid_argument);
         CHECK_THROWS_WITH_AS(
-                tree.add_route("/who/are/foo/bar", fake_handler()),
-                render_err_msg("/foo/bar", "/who/are/foo/bar", "/*you", "/who/are/*you").c_str(),
-                std::invalid_argument);
+            tree.add_route("/who/are/foo/bar", fake_handler()),
+            render_err_msg("/foo/bar", "/who/are/foo/bar", "/*you", "/who/are/*you").c_str(),
+            std::invalid_argument);
     }
 }
 

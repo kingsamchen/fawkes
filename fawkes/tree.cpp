@@ -85,7 +85,7 @@ void node::insert_route(std::string_view path, std::string_view full_path,
     if (len == path.size()) {
         if (handler_) [[unlikely]] {
             throw std::invalid_argument(
-                    fmt::format("a handler is already registered for path '{}'", full_path));
+                fmt::format("a handler is already registered for path '{}'", full_path));
         }
         handler_ = std::move(handler);
         return;
@@ -106,13 +106,13 @@ void node::insert_route(std::string_view path, std::string_view full_path,
 
         // Wildcard conflict.
         const auto segment = child.type_ != type::catch_all
-                                     ? *esl::strings::split(path, '/').begin()
-                                     : path;
+                                 ? *esl::strings::split(path, '/').begin()
+                                 : path;
         std::string prefix{full_path.substr(0, full_path.find(segment))};
         prefix += child.path_;
         throw std::invalid_argument(
-                fmt::format("'{}' in path '{}' conflicts with existing wildcard '{}' in '{}'",
-                            segment, full_path, child.path_, prefix));
+            fmt::format("'{}' in path '{}' conflicts with existing wildcard '{}' in '{}'",
+                        segment, full_path, child.path_, prefix));
     }
 
     const auto idxc = path[0];
@@ -162,13 +162,13 @@ void node::insert_path(std::string_view path, std::string_view full_path,
 
         if (!wildcard.valid_name()) {
             throw std::invalid_argument(
-                    fmt::format("invalid wildcard in path '{}'", full_path));
+                fmt::format("invalid wildcard in path '{}'", full_path));
         }
 
         if (!children_.empty()) {
             throw std::invalid_argument(fmt::format(
-                    "wildcard segment '{}' conflicts with existing children in path '{}'",
-                    wildcard.name, full_path));
+                "wildcard segment '{}' conflicts with existing children in path '{}'",
+                wildcard.name, full_path));
         }
     }
 
@@ -205,21 +205,21 @@ void node::insert_path(std::string_view path, std::string_view full_path,
     } else {
         if (wildcard.pos + wildcard.name.size() != path.size()) {
             throw std::invalid_argument(fmt::format(
-                    "catch-all is only allowed at the end of the path in '{}'", full_path));
+                "catch-all is only allowed at the end of the path in '{}'", full_path));
         }
 
         // e.g. `/hello/*name` would conflict with `/hello/` but not `/hello`.
         if (!path_.empty() && path_.ends_with('/')) {
             throw std::invalid_argument(fmt::format(
-                    "catch-all conflicts with existing handle for path segment root in '{}'",
-                    full_path));
+                "catch-all conflicts with existing handle for path segment root in '{}'",
+                full_path));
         }
 
         // Move to leading `/`.
         assert(wildcard.pos > 0);
         if (path[--wildcard.pos] != '/') {
             throw std::invalid_argument(fmt::format(
-                    "no / before catch-all in path '{}'", full_path));
+                "no / before catch-all in path '{}'", full_path));
         }
 
         path_ = path.substr(0, wildcard.pos);
