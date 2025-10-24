@@ -6,15 +6,16 @@ AlignConsecutiveBitFields: AcrossComments
 AlignConsecutiveMacros: AcrossComments
 AllowShortBlocksOnASingleLine: Empty
 AllowShortFunctionsOnASingleLine: Empty
-AllowShortLambdasOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: Empty
 AlwaysBreakTemplateDeclarations: Yes
-ColumnLimit: 0
-ConstructorInitializerIndentWidth: 4
-ContinuationIndentWidth: 8
 BracedInitializerIndentWidth: 4
 BreakAfterAttributes: Leave
 BreakBeforeConceptDeclarations: Always
+ColumnLimit: 0
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
 EmptyLineAfterAccessModifier: Never
+FixNamespaceComments: true
 IfMacros: ['IF']
 IncludeCategories:
   - Regex: '^<.*'
@@ -24,18 +25,24 @@ IncludeCategories:
   - Regex: '.*'
     Priority: 3
 IncludeIsMainRegex: '([-_](test|unittest))?$'
-IndentWidth: 4
 IndentRequiresClause: false
+IndentWidth: 4
 InsertNewlineAtEOF: true
 KeepEmptyLinesAtTheStartOfBlocks: false
 LineEnding: LF
 PointerAlignment: Left
 QualifierAlignment: Custom
 QualifierOrder: ['inline', 'static', 'friend', 'constexpr', 'const', 'volatile', 'type']
+RemoveEmptyLinesInUnwrappedLines: true
 RequiresClausePosition: OwnLine
+RequiresExpressionIndentation: OuterScope
+SeparateDefinitionBlocks: Always
 ShortNamespaceLines: 0
+SkipMacroDefinitionBody: true
 SpaceAfterTemplateKeyword: false
 SpaceBeforeParens: ControlStatementsExceptControlMacros
+Standard: c++20
+WrapNamespaceBodyWithEmptyLines: Always
 
 ---
 Language: Json

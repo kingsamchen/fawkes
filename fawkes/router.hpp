@@ -39,23 +39,23 @@ public:
                    std::tuple<Mws...>&& middlewares,
                    H&& handler) {
         route_handler_t route_handler =
-                [this,
-                 mws = std::move(middlewares),
-                 user_handler = std::forward<H>(handler)](request& req, response& resp) mutable {
-                    using enum middleware_result;
+            [this,
+             mws = std::move(middlewares),
+             user_handler = std::forward<H>(handler)](request& req, response& resp) mutable {
+                using enum middleware_result;
 
-                    if (base_middlewares_.pre_handle(req, resp) == abort ||
-                        detail::run_middlewares_pre_handle(mws, req, resp) == abort) {
-                        return;
-                    }
+                if (base_middlewares_.pre_handle(req, resp) == abort ||
+                    detail::run_middlewares_pre_handle(mws, req, resp) == abort) {
+                    return;
+                }
 
-                    user_handler(std::as_const(req), resp);
+                user_handler(std::as_const(req), resp);
 
-                    if (detail::run_middlewares_post_handle(mws, req, resp) == abort) {
-                        return;
-                    }
-                    esl::ignore_unused(base_middlewares_.post_handle(req, resp));
-                };
+                if (detail::run_middlewares_post_handle(mws, req, resp) == abort) {
+                    return;
+                }
+                esl::ignore_unused(base_middlewares_.post_handle(req, resp));
+            };
         routes_[verb].add_route(path, std::move(route_handler));
     }
 
