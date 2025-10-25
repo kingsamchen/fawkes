@@ -76,22 +76,23 @@ middleware_result run_middlewares_pre_handle(std::tuple<Mws...>& middlewares,
                                              response& resp) {
     if constexpr (sizeof...(Mws) == 0) {
         return middleware_result::proceed;
+    } else {
+        return apply_middlewares<true>(
+            middlewares,
+            req,
+            resp,
+            []<is_middleware M>(M& middleware,
+                                request& mw_req,
+                                response& mw_resp,
+                                middleware_result& ret) -> bool {
+                if constexpr (has_pre_handle<M>) {
+                    ret = middleware.pre_handle(mw_req, mw_resp);
+                    return ret == middleware_result::proceed;
+                } else {
+                    return true;
+                }
+            });
     }
-
-    return apply_middlewares<true>(
-        middlewares,
-        req,
-        resp,
-        []<is_middleware M>(M& middleware,
-                            request& mw_req,
-                            response& mw_resp,
-                            middleware_result& ret) -> bool {
-            if constexpr (has_pre_handle<M>) {
-                ret = middleware.pre_handle(mw_req, mw_resp);
-                return ret == middleware_result::proceed;
-            }
-            return true;
-        });
 }
 
 template<is_middleware... Mws>
@@ -100,22 +101,23 @@ middleware_result run_middlewares_post_handle(std::tuple<Mws...>& middlewares,
                                               response& resp) {
     if constexpr (sizeof...(Mws) == 0) {
         return middleware_result::proceed;
+    } else {
+        return detail::apply_middlewares<false>(
+            middlewares,
+            req,
+            resp,
+            []<is_middleware M>(M& middleware,
+                                request& mw_req,
+                                response& mw_resp,
+                                middleware_result& ret) -> bool {
+                if constexpr (has_post_handle<M>) {
+                    ret = middleware.post_handle(mw_req, mw_resp);
+                    return ret == middleware_result::proceed;
+                } else {
+                    return true;
+                }
+            });
     }
-
-    return detail::apply_middlewares<false>(
-        middlewares,
-        req,
-        resp,
-        []<is_middleware M>(M& middleware,
-                            request& mw_req,
-                            response& mw_resp,
-                            middleware_result& ret) -> bool {
-            if constexpr (has_post_handle<M>) {
-                ret = middleware.post_handle(mw_req, mw_resp);
-                return ret == middleware_result::proceed;
-            }
-            return true;
-        });
 }
 
 } // namespace detail
