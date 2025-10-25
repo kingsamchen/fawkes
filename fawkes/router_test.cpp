@@ -6,7 +6,6 @@
 
 #include <doctest/doctest.h>
 #include <esl/ignore_unused.h>
-#include <spdlog/spdlog.h>
 
 #include "fawkes/middleware.hpp"
 #include "fawkes/request.hpp"

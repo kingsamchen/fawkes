@@ -35,6 +35,7 @@ function(fawkes_common_compile_configs TARGET)
     target_compile_options(${TARGET}
       PRIVATE
         /W4
+        /WX
         /wd4819 # source characters not in current code page.
 
         /Zc:inline            # Have the compiler eliminate unreferenced COMDAT functions and data before emitting the object file.
