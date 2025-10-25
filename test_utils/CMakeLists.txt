@@ -27,3 +27,6 @@ fawkes_use_sanitizers(test_utils)
 
 get_target_property(test_utils_FILES test_utils SOURCES)
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${test_utils_FILES})
+
+# Force MSVC use CXX linker.
+set_target_properties(test_utils PROPERTIES LINKER_LANGUAGE CXX)
