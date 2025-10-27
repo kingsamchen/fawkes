@@ -56,8 +56,6 @@ else()
   include(${FAWKES_CMAKE_DIR}/compiler_posix.cmake)
 endif()
 
-include(${FAWKES_CMAKE_DIR}/pch.cmake)
-
 include(${FAWKES_CMAKE_DIR}/clang_tidy.cmake)
 include(${FAWKES_CMAKE_DIR}/sanitizer.cmake)
 
@@ -83,6 +81,8 @@ target_compile_options(Boost::json
   INTERFACE
     $<$<CXX_COMPILER_ID:GNU>:-Wno-stringop-overflow>
 )
+
+include(${FAWKES_CMAKE_DIR}/pch.cmake)
 
 if(BUILD_TESTING)
   add_subdirectory(test_utils)
