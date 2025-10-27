@@ -54,10 +54,7 @@ fawkes_use_sanitizers(fawkes)
 get_target_property(fawkes_FILES fawkes SOURCES)
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${fawkes_FILES})
 
-target_precompile_headers(fawkes
-  PRIVATE
-    "${FAWKES_PCH_HEADERS_BASE}"
-)
+target_precompile_headers(fawkes REUSE_FROM fawkes.pch)
 
 #
 # fawkes_test
@@ -83,7 +80,6 @@ target_link_libraries(fawkes_test
     doctest::doctest
     fawkes::fawkes
     fawkes::test_utils
-    spdlog::spdlog # TODO: Resolve pch issue
 )
 
 target_include_directories(fawkes_test
@@ -100,6 +96,6 @@ fawkes_use_sanitizers(fawkes_test)
 get_target_property(fawkes_test_FILES fawkes_test SOURCES)
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${fawkes_test_FILES})
 
-target_precompile_headers(fawkes_test REUSE_FROM fawkes)
+target_precompile_headers(fawkes_test REUSE_FROM fawkes.pch)
 
 add_test(NAME FawkesTest COMMAND fawkes_test)

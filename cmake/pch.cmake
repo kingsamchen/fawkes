@@ -28,3 +28,19 @@ set(FAWKES_PCH_HEADERS_BASE
   "<variant>"
   "<vector>"
 )
+
+add_library(fawkes.pch OBJECT)
+
+target_sources(fawkes.pch
+  PRIVATE
+    ${FAWKES_DIR}/build/pch/pch.cpp
+)
+
+fawkes_common_compile_configs(fawkes.pch)
+
+fawkes_use_sanitizers(fawkes.pch)
+
+target_precompile_headers(fawkes.pch
+  PRIVATE
+    "${FAWKES_PCH_HEADERS_BASE}"
+)
