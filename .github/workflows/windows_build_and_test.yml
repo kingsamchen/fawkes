@@ -18,19 +18,19 @@ jobs:
         # https://github.com/actions/virtual-environments.
         # Only x64 is supported.
         os: [windows-2022]
-        run_tidy: [ON]
         include:
           - os: windows-2022
-            run_tidy: ON
-
-    env:
-      VCPKG_ROOT: "C:\\vcpkg"
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup MSVC dev environment
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: x64
+
       - name: Build and test
+        env:
+          VCPKG_ROOT: "C:\\vcpkg"
         run: |
-          cmake --preset windows-release -DFAWKES_CLANG_TIDY_ON_BUILD=${{matrix.run_tidy}}
-          cmake --build --preset windows-release
-          ctest --preset windows-release
+          cmake --workflow --preset windows-ci

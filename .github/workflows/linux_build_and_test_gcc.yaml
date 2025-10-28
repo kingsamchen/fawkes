@@ -52,4 +52,4 @@ jobs:
         env:
           CXX: ${{matrix.cxx}}
         run: |
-          cmake --workflow --preset linux-release
+          cmake --workflow --preset linux-ci

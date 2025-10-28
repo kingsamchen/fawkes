@@ -51,6 +51,6 @@ jobs:
           CC: clang-20
           CXX: clang++-20
         run: |
-          cmake --preset linux-release -DFAWKES_USE_SANITIZERS="" -DFAWKES_BUILD_EXAMPLES=ON \
+          cmake --preset linux-ci -DFAWKES_USE_SANITIZERS="" -DFAWKES_BUILD_EXAMPLES=ON \
             -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON -DCMAKE_CXX_SCAN_FOR_MODULES=OFF
-          run-clang-tidy-20 -p out/linux-release -source-filter '.*\/fawkes\/(fawkes|examples)\/.*'
+          run-clang-tidy-20 -p out/linux-ci -source-filter '.*\/fawkes\/(fawkes|examples)\/.*'

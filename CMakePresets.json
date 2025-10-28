@@ -15,8 +15,24 @@
             "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
+                "FAWKES_USE_SANITIZERS": "",
+                "FAWKES_CLANG_TIDY_ON_BUILD": "OFF",
+                "FAWKES_BUILD_EXAMPLES": "OFF"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "linux-ci",
+            "inherits": "linux-release",
+            "displayName": "Linux CI Pipeline",
+            "description": "CI pipeline build on Linux",
+            "cacheVariables": {
                 "FAWKES_USE_SANITIZERS": "ASAN;UBSAN",
-                "FAWKES_CLANG_TIDY_ON_BUILD": "OFF"
+                "FAWKES_BUILD_EXAMPLES": "ON"
             }
         },
         {
@@ -26,6 +42,7 @@
             "description": "Dev build on Linux",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
+                "FAWKES_USE_SANITIZERS": "ASAN;UBSAN",
                 "FAWKES_BUILD_EXAMPLES": "ON"
             }
         },
@@ -36,8 +53,10 @@
             "binaryDir": "${sourceDir}/out/${presetName}",
             "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
             "cacheVariables": {
+                "CMAKE_CONFIGURATION_TYPES": "Release",
                 "FAWKES_USE_SANITIZERS": "",
-                "FAWKES_CLANG_TIDY_ON_BUILD": "ON"
+                "FAWKES_CLANG_TIDY_ON_BUILD": "OFF",
+                "FAWKES_BUILD_EXAMPLES": "OFF"
             },
             "condition": {
                 "type": "equals",
@@ -46,13 +65,27 @@
             }
         },
         {
+            "name": "windows-ci",
+            "inherits": "windows-release",
+            "displayName": "Windows CI Pipeline",
+            "description": "CI pipeline build on Windows",
+            "cacheVariables": {
+                "CMAKE_CONFIGURATION_TYPES": "Release",
+                "FAWKES_USE_SANITIZERS": "ASAN",
+                "FAWKES_CLANG_TIDY_ON_BUILD": "ON",
+                "FAWKES_BUILD_EXAMPLES": "ON"
+            }
+        },
+        {
             "name": "windows-dev",
             "inherits": "windows-release",
             "displayName": "Windows Dev",
             "description": "Dev build on Windows",
             "cacheVariables": {
+                "CMAKE_CONFIGURATION_TYPES": "Debug",
                 "FAWKES_USE_SANITIZERS": "ASAN",
-                "FAWKES_CLANG_TIDY_ON_BUILD": "OFF"
+                "FAWKES_CLANG_TIDY_ON_BUILD": "OFF",
+                "FAWKES_BUILD_EXAMPLES": "ON"
             }
         }
     ],
@@ -60,21 +93,31 @@
         {
             "name": "linux-release",
             "configurePreset": "linux-release",
+            "cleanFirst": true,
+            "verbose": true
+        },
+        {
+            "name": "linux-ci",
+            "inherits": "linux-release",
+            "configurePreset": "linux-ci"
+        },
+        {
+            "name": "windows-release",
+            "configurePreset": "windows-release",
             "configuration": "Release",
             "cleanFirst": true,
             "verbose": true
         },
         {
-            "name": "windows-release",
-            "inherits": "linux-release",
-            "configurePreset": "windows-release"
+            "name": "windows-ci",
+            "inherits": "windows-release",
+            "configurePreset": "windows-ci"
         }
     ],
     "testPresets": [
         {
-            "name": "linux-release",
-            "configurePreset": "linux-release",
-            "configuration": "Release",
+            "name": "linux-ci",
+            "configurePreset": "linux-ci",
             "output": {
                 "outputOnFailure": true
             },
@@ -84,43 +127,50 @@
             }
         },
         {
-            "name": "windows-release",
-            "inherits": "linux-release",
-            "configurePreset": "windows-release"
+            "name": "windows-ci",
+            "configurePreset": "windows-ci",
+            "configuration": "Release",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": true
+            }
         }
     ],
     "workflowPresets": [
         {
-            "name": "linux-release",
+            "name": "linux-ci",
             "steps": [
                 {
                     "type": "configure",
-                    "name": "linux-release"
+                    "name": "linux-ci"
                 },
                 {
                     "type": "build",
-                    "name": "linux-release"
+                    "name": "linux-ci"
                 },
                 {
                     "type": "test",
-                    "name": "linux-release"
+                    "name": "linux-ci"
                 }
             ]
         },
         {
-            "name": "windows-release",
+            "name": "windows-ci",
             "steps": [
                 {
                     "type": "configure",
-                    "name": "windows-release"
+                    "name": "windows-ci"
                 },
                 {
                     "type": "build",
-                    "name": "windows-release"
+                    "name": "windows-ci"
                 },
                 {
                     "type": "test",
-                    "name": "windows-release"
+                    "name": "windows-ci"
                 }
             ]
         }
