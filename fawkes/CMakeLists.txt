@@ -57,16 +57,16 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${fawkes_FILES})
 target_precompile_headers(fawkes REUSE_FROM fawkes.pch)
 
 #
-# fawkes_test
+# fawkes.tests
 #
 
 if(NOT BUILD_TESTING)
   return()
 endif()
 
-add_executable(fawkes_test)
+add_executable(fawkes.tests)
 
-target_sources(fawkes_test
+target_sources(fawkes.tests
   PRIVATE
     test_main.cpp
 
@@ -75,27 +75,27 @@ target_sources(fawkes_test
     tree_test.cpp
 )
 
-target_link_libraries(fawkes_test
+target_link_libraries(fawkes.tests
   PRIVATE
     doctest::doctest
     fawkes::fawkes
     fawkes::test_utils
 )
 
-target_include_directories(fawkes_test
+target_include_directories(fawkes.tests
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../
 )
 
-fawkes_common_compile_configs(fawkes_test)
+fawkes_common_compile_configs(fawkes.tests)
 
-fawkes_clang_tidy_on_build(fawkes_test)
+fawkes_clang_tidy_on_build(fawkes.tests)
 
-fawkes_use_sanitizers(fawkes_test)
+fawkes_use_sanitizers(fawkes.tests)
 
-get_target_property(fawkes_test_FILES fawkes_test SOURCES)
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${fawkes_test_FILES})
+get_target_property(fawkes.tests_FILES fawkes.tests SOURCES)
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${fawkes.tests_FILES})
 
-target_precompile_headers(fawkes_test REUSE_FROM fawkes.pch)
+target_precompile_headers(fawkes.tests REUSE_FROM fawkes.pch)
 
-add_test(NAME FawkesTest COMMAND fawkes_test)
+add_test(NAME FawkesTests COMMAND fawkes.tests)
