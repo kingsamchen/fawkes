@@ -4,6 +4,7 @@
 
 #include <tuple>
 
+#include <boost/asio/awaitable.hpp>
 #include <doctest/doctest.h>
 #include <esl/ignore_unused.h>
 
@@ -14,15 +15,26 @@
 
 namespace {
 
+namespace asio = boost::asio;
+
 TEST_SUITE_BEGIN("Routes");
 
+TEST_CASE("Type trait is_asio_awaitable") {
+    static_assert(fawkes::is_asio_awaitable_v<asio::awaitable<void>>);
+    static_assert(!fawkes::is_asio_awaitable_v<int>);
+}
+
 TEST_CASE("Concept is_user_handler") {
-    auto h = [](const fawkes::request& /*req*/, fawkes::response& /*resp*/) {
+    auto h = [](const fawkes::request& /*req*/, fawkes::response& /*resp*/)
+        -> asio::awaitable<void> {
+        co_return;
     };
     static_assert(fawkes::is_user_handler<decltype(h)>);
 
     SUBCASE("user handler must use const request&") {
-        auto hd = [](fawkes::request& /*req*/, fawkes::response& /*resp*/) {
+        auto hd = [](fawkes::request& /*req*/, fawkes::response& /*resp*/)
+            -> asio::awaitable<void> {
+            co_return;
         };
         static_assert(!fawkes::is_user_handler<decltype(hd)>);
     }

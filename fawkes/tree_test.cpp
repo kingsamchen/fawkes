@@ -5,6 +5,7 @@
 #include <initializer_list>
 #include <string>
 
+#include <boost/asio/awaitable.hpp>
 #include <doctest/doctest.h>
 #include <fmt/format.h>
 
@@ -12,6 +13,8 @@
 #include "fawkes/tree.hpp"
 
 #include "test_utils/stringification.hpp" // IWYU pragma: keep
+
+namespace asio = boost::asio;
 
 namespace fawkes {
 
@@ -67,7 +70,8 @@ struct fmt::formatter<fawkes::detail::param> {
 namespace {
 
 auto fake_handler() {
-    return [](const fawkes::request&, fawkes::response&) {
+    return [](const fawkes::request&, fawkes::response&) -> asio::awaitable<void> {
+        co_return;
     };
 }
 
@@ -494,8 +498,11 @@ TEST_CASE("Locate non-wild path") {
     fawkes::node tree;
     std::string handler_path;
     for (const auto path : paths) {
-        tree.add_route(path, [&handler_path, path](const auto&, auto&) {
+        tree.add_route(path, [&handler_path, path](const auto&, auto&) -> asio::awaitable<void> {
             handler_path = path;
+            return []() -> asio::awaitable<void> {
+                co_return;
+            }();
         });
     }
 
@@ -520,7 +527,7 @@ TEST_CASE("Locate non-wild path") {
         if (handler) {
             fawkes::request fake_req;
             fawkes::response fake_resp;
-            (*handler)(fake_req, fake_resp);
+            esl::ignore_unused((*handler)(fake_req, fake_resp));
             CHECK_EQ(handler_path, req.test_path);
         }
     }
@@ -547,8 +554,11 @@ TEST_CASE("Locate wildcard path") {
     fawkes::node tree;
     std::string handler_path;
     for (const auto path : paths) {
-        tree.add_route(path, [&handler_path, path](const auto&, auto&) {
+        tree.add_route(path, [&handler_path, path](const auto&, auto&) -> asio::awaitable<void> {
             handler_path = path;
+            return []() -> asio::awaitable<void> {
+                co_return;
+            }();
         });
     }
 
@@ -596,7 +606,7 @@ TEST_CASE("Locate wildcard path") {
         if (handler) {
             fawkes::request fake_req;
             fawkes::response fake_resp;
-            (*handler)(fake_req, fake_resp);
+            esl::ignore_unused((*handler)(fake_req, fake_resp));
             CHECK_EQ(handler_path, req.hit_route);
         }
     }

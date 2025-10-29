@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include <boost/asio/awaitable.hpp>
 #include <esl/ignore_unused.h>
 #include <esl/strings.h>
 #include <esl/utility.h>
@@ -24,7 +25,7 @@
 
 namespace fawkes {
 
-using route_handler_t = std::function<void(request&, response&)>;
+using route_handler_t = std::function<boost::asio::awaitable<void>(request&, response&)>;
 
 namespace detail {
 

@@ -9,6 +9,7 @@
 #include <tuple>
 #include <utility>
 
+#include <boost/asio/awaitable.hpp>
 #include <boost/beast/http/verb.hpp>
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <esl/ignore_unused.h>
@@ -19,10 +20,21 @@
 
 namespace fawkes {
 
+namespace asio = boost::asio;
 namespace beast = boost::beast;
 
+template<typename T>
+struct is_asio_awaitable : std::false_type {};
+
+template<typename Executor>
+struct is_asio_awaitable<asio::awaitable<void, Executor>> : std::true_type {};
+
+template<typename T>
+constexpr bool is_asio_awaitable_v = is_asio_awaitable<T>::value;
+
 template<typename F>
-concept is_user_handler = std::invocable<F, const request&, response&>;
+concept is_user_handler = std::invocable<F, const request&, response&> &&
+                          is_asio_awaitable_v<std::invoke_result_t<F, const request&, response&>>;
 
 class router {
 public:
@@ -41,21 +53,22 @@ public:
         route_handler_t route_handler =
             [this,
              mws = std::move(middlewares),
-             user_handler = std::forward<H>(handler)](request& req, response& resp) mutable {
-                using enum middleware_result;
+             user_handler = std::forward<H>(handler)](request& req, response& resp) mutable
+            -> asio::awaitable<void> {
+            using enum middleware_result;
 
-                if (base_middlewares_.pre_handle(req, resp) == abort ||
-                    detail::run_middlewares_pre_handle(mws, req, resp) == abort) {
-                    return;
-                }
+            if (base_middlewares_.pre_handle(req, resp) == abort ||
+                detail::run_middlewares_pre_handle(mws, req, resp) == abort) {
+                co_return;
+            }
 
-                user_handler(std::as_const(req), resp);
+            co_await user_handler(std::as_const(req), resp);
 
-                if (detail::run_middlewares_post_handle(mws, req, resp) == abort) {
-                    return;
-                }
-                esl::ignore_unused(base_middlewares_.post_handle(req, resp));
-            };
+            if (detail::run_middlewares_post_handle(mws, req, resp) == abort) {
+                co_return;
+            }
+            esl::ignore_unused(base_middlewares_.post_handle(req, resp));
+        };
         routes_[verb].add_route(path, std::move(route_handler));
     }
 

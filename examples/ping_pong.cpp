@@ -2,7 +2,13 @@
 // This file is subject to the terms of license that can be found
 // in the LICENSE file.
 
+#include <chrono>
+
+#include <boost/asio/awaitable.hpp>
 #include <boost/asio/io_context.hpp>
+#include <boost/asio/steady_timer.hpp>
+#include <boost/asio/this_coro.hpp>
+#include <esl/ignore_unused.h>
 #include <gflags/gflags.h>
 #include <spdlog/spdlog.h>
 
@@ -16,13 +22,30 @@ int main() {
     try {
         boost::asio::io_context io_ctx{1};
         fawkes::server svc(io_ctx);
-        svc.do_get("/ping", [](const fawkes::request& req, fawkes::response& resp) {
-            auto q = req.queries().get("q");
-            if (q.has_value()) {
-                spdlog::info("q={}", *q);
-            }
-            resp.mutable_body() = "Pong!";
-        });
+        svc.do_get("/ping",
+                   [](const fawkes::request& req, fawkes::response& resp)
+                       -> boost::asio::awaitable<void> {
+                       auto q = req.queries().get("q");
+                       if (q.has_value()) {
+                           spdlog::info("q={}", *q);
+                       }
+                       resp.mutable_body() = "Pong!";
+                       co_return;
+                   });
+        svc.do_get("/delayed",
+                   [](const fawkes::request& req, fawkes::response& resp)
+                       -> boost::asio::awaitable<void> {
+                       esl::ignore_unused(req);
+                       SPDLOG_INFO("wait for a moment...");
+
+                       boost::asio::steady_timer timer(co_await boost::asio::this_coro::executor);
+                       timer.expires_after(std::chrono::seconds(3));
+                       co_await timer.async_wait();
+
+                       resp.mutable_body() = "Pong!";
+
+                       co_return;
+                   });
         svc.listen_and_serve("0.0.0.0", static_cast<std::uint16_t>(FLAGS_port));
         spdlog::info("ping-pong server is listenning at {}", FLAGS_port);
         io_ctx.run();

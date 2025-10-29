@@ -7,6 +7,7 @@
 #include <string>
 #include <string_view>
 
+#include <boost/asio/awaitable.hpp>
 #include <boost/asio/io_context.hpp>
 #include <esl/ignore_unused.h>
 #include <fmt/chrono.h>
@@ -62,16 +63,21 @@ int main() {
         // Per-route middlewares.
         svc.do_get("/now",
                    fawkes::middlewares::use(tracking_id{}),
-                   [](const fawkes::request& req, fawkes::response& resp) {
+                   [](const fawkes::request& req, fawkes::response& resp)
+                       -> boost::asio::awaitable<void> {
                        esl::ignore_unused(req);
                        auto tp = std::chrono::system_clock::now();
                        resp.mutable_body() = fmt::format("{}", tp);
+                       co_return;
                    });
 
-        svc.do_get("/healthcheck", [](const fawkes::request& req, fawkes::response& resp) {
-            esl::ignore_unused(req);
-            resp.mutable_body() = "pong";
-        });
+        svc.do_get("/healthcheck",
+                   [](const fawkes::request& req, fawkes::response& resp)
+                       -> boost::asio::awaitable<void> {
+                       esl::ignore_unused(req);
+                       resp.mutable_body() = "pong";
+                       co_return;
+                   });
 
         svc.listen_and_serve("0.0.0.0", static_cast<std::uint16_t>(FLAGS_port));
         SPDLOG_INFO("Server is listening at {}", FLAGS_port);

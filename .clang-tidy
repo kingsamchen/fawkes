@@ -12,8 +12,10 @@ Checks: >
   readability-*,
   -bugprone-easily-swappable-parameters,
   -cppcoreguidelines-avoid-c-arrays,
+  -cppcoreguidelines-avoid-capturing-lambda-coroutines,
   -cppcoreguidelines-avoid-do-while,
   -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-avoid-reference-coroutine-parameters,
   -cppcoreguidelines-non-private-member-variables-in-classes,
   -cppcoreguidelines-owning-memory,
   -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
@@ -25,6 +27,7 @@ Checks: >
   -modernize-avoid-c-arrays,
   -modernize-return-braced-init-list,
   -modernize-use-trailing-return-type,
+  -portability-avoid-pragma-once,
   -readability-function-cognitive-complexity,
   -readability-identifier-length,
 
@@ -51,5 +54,9 @@ CheckOptions:
   - key: readability-magic-numbers.IgnorePowersOf2IntegerValues
     value: 1
   - key: readability-magic-numbers.IgnoredIntegerValues
+    value: 0;1;2;3;4;5;6;7;8;9;10;16;32;42;64;100;128;256;512;1000;1024
+  - key: cppcoreguidelines-avoid-magic-numbers.IgnorePowersOf2IntegerValues
+    value: 1
+  - key: cppcoreguidelines-avoid-magic-numbers.IgnoredIntegerValues
     value: 0;1;2;3;4;5;6;7;8;9;10;16;32;42;64;100;128;256;512;1000;1024
 ...
