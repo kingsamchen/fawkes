@@ -14,6 +14,9 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/core/tcp_stream.hpp>
+#include <boost/beast/http/message.hpp>
+#include <boost/beast/http/message_generator.hpp>
+#include <boost/beast/http/string_body.hpp>
 
 #include "fawkes/router.hpp"
 
@@ -21,6 +24,7 @@ namespace fawkes {
 
 namespace asio = boost::asio;
 namespace beast = boost::beast;
+namespace http = boost::beast::http;
 
 class server {
 public:
@@ -40,79 +44,75 @@ public:
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H>
     void do_get(std::string_view path, H&& handler) {
-        router_.add_route(beast::http::verb::get, path, std::forward<H>(handler));
+        router_.add_route(http::verb::get, path, std::forward<H>(handler));
     }
 
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H, is_middleware... Mws>
     void do_get(std::string_view path, std::tuple<Mws...>&& middlewares, H&& handler) {
-        router_.add_route(beast::http::verb::get, path, std::move(middlewares),
-                          std::forward<H>(handler));
+        router_.add_route(http::verb::get, path, std::move(middlewares), std::forward<H>(handler));
     }
 
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H>
     void do_post(std::string_view path, H&& handler) {
-        router_.add_route(beast::http::verb::post, path, std::forward(handler));
+        router_.add_route(http::verb::post, path, std::forward(handler));
     }
 
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H, is_middleware... Mws>
     void do_post(std::string_view path, std::tuple<Mws...>&& middlewares, H&& handler) {
-        router_.add_route(beast::http::verb::post, path, std::move(middlewares),
-                          std::forward<H>(handler));
+        router_.add_route(http::verb::post, path, std::move(middlewares), std::forward<H>(handler));
     }
 
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H>
     void do_patch(std::string_view path, H&& handler) {
-        router_.add_route(beast::http::verb::patch, path, std::forward<H>(handler));
+        router_.add_route(http::verb::patch, path, std::forward<H>(handler));
     }
 
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H, is_middleware... Mws>
     void do_patch(std::string_view path, std::tuple<Mws...>&& middlewares, H&& handler) {
-        router_.add_route(beast::http::verb::patch, path, std::move(middlewares),
+        router_.add_route(http::verb::patch, path, std::move(middlewares),
                           std::forward<H>(handler));
     }
 
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H>
     void do_put(std::string_view path, H&& handler) {
-        router_.add_route(beast::http::verb::put, path, std::forward<H>(handler));
+        router_.add_route(http::verb::put, path, std::forward<H>(handler));
     }
 
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H, is_middleware... Mws>
     void do_put(std::string_view path, std::tuple<Mws...>&& middlewares, H&& handler) {
-        router_.add_route(beast::http::verb::put, path, std::move(middlewares),
-                          std::forward<H>(handler));
+        router_.add_route(http::verb::put, path, std::move(middlewares), std::forward<H>(handler));
     }
 
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H>
     void do_delete(std::string_view path, H&& handler) {
-        router_.add_route(beast::http::verb::delete_, path, std::forward<H>(handler));
+        router_.add_route(http::verb::delete_, path, std::forward<H>(handler));
     }
 
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H, is_middleware... Mws>
     void do_delete(std::string_view path, std::tuple<Mws...>&& middlewares, H&& handler) {
-        router_.add_route(beast::http::verb::delete_, path, std::move(middlewares),
+        router_.add_route(http::verb::delete_, path, std::move(middlewares),
                           std::forward<H>(handler));
     }
 
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H>
     void do_head(std::string_view path, H&& handler) {
-        router_.add_route(beast::http::verb::head, path, std::forward<H>(handler));
+        router_.add_route(http::verb::head, path, std::forward<H>(handler));
     }
 
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H, is_middleware... Mws>
     void do_head(std::string_view path, std::tuple<Mws...>&& middlewares, H&& handler) {
-        router_.add_route(beast::http::verb::head, path, std::move(middlewares),
-                          std::forward<H>(handler));
+        router_.add_route(http::verb::head, path, std::move(middlewares), std::forward<H>(handler));
     }
 
     router& get_router() {
@@ -123,6 +123,9 @@ private:
     asio::awaitable<void> do_listen();
 
     [[nodiscard]] asio::awaitable<void> serve_session(beast::tcp_stream stream) const;
+
+    [[nodiscard]] asio::awaitable<http::message_generator> handle_request(
+        http::request<http::string_body> req) const;
 
     static void handle_session_error(const asio::ip::tcp::endpoint& remote,
                                      std::exception_ptr eptr);

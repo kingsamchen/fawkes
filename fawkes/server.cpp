@@ -28,7 +28,6 @@
 namespace fawkes {
 namespace {
 
-namespace http = beast::http;
 namespace json = boost::json;
 
 http::response<http::string_body> make_error_response(unsigned int http_version,
@@ -42,44 +41,6 @@ http::response<http::string_body> make_error_response(unsigned int http_version,
     resp.body() = std::move(body);
     resp.prepare_payload();
     return resp;
-}
-
-http::message_generator handle_request(http::request<http::string_body>&& req,
-                                       const router& router) {
-    const auto http_ver = req.version();
-    const auto keep_alive = req.keep_alive();
-    try {
-        request fwk_req(std::move(req));
-
-        const auto* handler = router.locate_route(fwk_req.header().method(),
-                                                  fwk_req.path(),
-                                                  fwk_req.mutable_params());
-        if (!handler) {
-            throw http_error(http::status::not_found, "Unknown resource");
-        }
-
-        response faw_resp;
-        (*handler)(fwk_req, faw_resp);
-
-        auto& resp_impl = faw_resp.as_mutable_impl();
-        resp_impl.version(http_ver);
-        resp_impl.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        resp_impl.keep_alive(keep_alive);
-        resp_impl.prepare_payload();
-
-        return std::move(resp_impl);
-    } catch (const http_error& ex) {
-        json::object err{{"message", ex.what()}};
-        if (const auto& ec = ex.error_code(); ec.has_value()) {
-            err["code"] = *ec;
-        }
-        const json::object body{{"error", std::move(err)}};
-        return make_error_response(http_ver, keep_alive, ex.status_code(), json::serialize(body));
-    } catch (const std::exception& ex) {
-        const json::object body{{"error", json::object{{"message", ex.what()}}}};
-        return make_error_response(http_ver, keep_alive, http::status::internal_server_error,
-                                   json::serialize(body));
-    }
 }
 
 } // namespace
@@ -124,7 +85,7 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream) const {
         http::request<http::string_body> req;
         co_await http::async_read(stream, buf, req);
 
-        auto resp = handle_request(std::move(req), router_);
+        auto resp = co_await handle_request(std::move(req));
         const bool keep_alive = resp.keep_alive();
 
         co_await beast::async_write(stream, std::move(resp));
@@ -135,6 +96,45 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream) const {
     }
 
     stream.socket().shutdown(asio::ip::tcp::socket::shutdown_send);
+}
+
+asio::awaitable<http::message_generator> server::handle_request(
+    http::request<http::string_body> req) const {
+    const auto http_ver = req.version();
+    const auto keep_alive = req.keep_alive();
+    try {
+        request fwk_req(std::move(req));
+
+        const auto* handler = router_.locate_route(fwk_req.header().method(),
+                                                   fwk_req.path(),
+                                                   fwk_req.mutable_params());
+        if (!handler) {
+            throw http_error(http::status::not_found, "Unknown resource");
+        }
+
+        response faw_resp;
+        co_await (*handler)(fwk_req, faw_resp);
+
+        auto& resp_impl = faw_resp.as_mutable_impl();
+        resp_impl.version(http_ver);
+        resp_impl.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+        resp_impl.keep_alive(keep_alive);
+        resp_impl.prepare_payload();
+
+        co_return std::move(resp_impl);
+    } catch (const http_error& ex) {
+        json::object err{{"message", ex.what()}};
+        if (const auto& ec = ex.error_code(); ec.has_value()) {
+            err["code"] = *ec;
+        }
+        const json::object body{{"error", std::move(err)}};
+        co_return make_error_response(http_ver, keep_alive, ex.status_code(),
+                                      json::serialize(body));
+    } catch (const std::exception& ex) {
+        const json::object body{{"error", json::object{{"message", ex.what()}}}};
+        co_return make_error_response(http_ver, keep_alive, http::status::internal_server_error,
+                                      json::serialize(body));
+    }
 }
 
 // static
