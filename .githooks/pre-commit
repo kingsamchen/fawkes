@@ -6,14 +6,14 @@ scripts_dir="${hook_dir}/scripts"
 function run_clang_format_diff() {
     echo "Running clang-format-diff..."
 
-    fmt_diff=$(git diff --no-ext-diff -U0 --no-color --relative --cached | ${scripts_dir}/clang-format-diff.py -p1)
+    local fmt_diff=$(git diff --no-ext-diff -U0 --no-color --relative --cached | ${scripts_dir}/clang-format-diff.py -p1)
 
-    colorize_diff='
+    local colorize_diff='
         /^+/ { printf "\033[1;32m" }
         /^-/ { printf "\033[1;31m" }
         // { print $0 "\033[0m"; }'
 
-    if [ -n "${fmt_diff}" ]; then
+    if [[ -n ${fmt_diff} ]]; then
         echo "${fmt_diff}" | awk "${colorize_diff}"
         echo -e "\nPlease re-format above files before commit"
         exit 1
@@ -25,10 +25,10 @@ function run_clang_format_diff() {
 function run_cpplint_check() {
     echo "Running cpplint check..."
 
-    changed_files=$(git diff --cached --name-only | grep -iE '\.(cpp|cc|c|hpp|hh|h)$')
-    if [ -n "${changed_files}" ]; then
+    local changed_files=$(git diff --cached --name-only | grep -iE '\.(cpp|cc|c|hpp|hh|h)$')
+    if [[ -n ${changed_files} ]]; then
         ${scripts_dir}/cpplint.py --quiet ${changed_files}
-        if [ "$?" -ne 0 ]; then
+        if [[ "$?" -ne 0 ]]; then
             exit 1
         fi
     fi
@@ -36,5 +36,54 @@ function run_cpplint_check() {
     echo "cpplint check passed"
 }
 
+function detect_cxx_compiler() {
+    local cxx="/usr/bin/c++"
+    local macros=$(printf '' | "$cxx" -dM -E - 2>/dev/null || true)
+
+    if [[ $macros == *"#define __clang__"* ]]; then
+        printf 'clang'
+    elif [[ $macros == *"#define __GNUC__"* ]]; then
+        printf 'gcc'
+    else
+        printf 'unknown'
+    fi
+}
+
+function run_clang_tidy_diff() {
+    echo "Running clang-tidy-diff..."
+
+    local compile_db_dir="out"
+    local src_compile_db="${compile_db_dir}/compile_commands.json"
+    local tmp_tidy_dir="/tmp/tidy-diff"
+
+    if [[ ! -f ${src_compile_db} ]]; then
+        echo "${src_compile_db} not found, skip clang-tidy-diff"
+        exit 0
+    fi
+
+    if [[ $(detect_cxx_compiler) != "clang"  ]]; then
+        echo "compiler is not clang, fix compile db file for tidy"
+        mkdir -p ${tmp_tidy_dir}
+        ${scripts_dir}/rm-gxx-pch.py ${src_compile_db} "${tmp_tidy_dir}/compile_commands.json"
+        if [[ $? -ne 0 ]]; then
+            exit 1
+        fi
+        compile_db_dir=${tmp_tidy_dir}
+    fi
+
+    git diff --no-ext-diff -U0 --cached | \
+        ${scripts_dir}/clang-tidy-diff.py -p1 \
+                                          -use-color \
+                                          -only-check-in-db \
+                                          -extra-arg=-Wno-unknown-warning-option \
+                                          -path ${compile_db_dir} \
+                                          -j $(($(nproc) / 2 + 1))
+    if [[ "$?" -ne 0 ]]; then
+        exit 1
+    fi
+    echo "clang-tidy-diff passed"
+}
+
 run_clang_format_diff && \
-run_cpplint_check
+run_cpplint_check && \
+run_clang_tidy_diff
