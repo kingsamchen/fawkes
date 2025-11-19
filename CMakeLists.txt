@@ -93,3 +93,9 @@ add_subdirectory(fawkes)
 if(FAWKES_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
+
+file(CREATE_LINK
+  "${CMAKE_BINARY_DIR}/compile_commands.json"
+  "${CMAKE_BINARY_DIR}/../compile_commands.json"
+  SYMBOLIC
+)
