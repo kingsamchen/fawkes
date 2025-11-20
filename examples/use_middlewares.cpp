@@ -6,9 +6,12 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/io_context.hpp>
+#include <boost/beast/http/verb.hpp>
+#include <boost/url.hpp>
 #include <esl/ignore_unused.h>
 #include <fmt/chrono.h>
 #include <fmt/format.h>
@@ -16,11 +19,16 @@
 #include <spdlog/spdlog.h>
 
 #include "fawkes/middleware.hpp"
+#include "fawkes/middlewares/cors.hpp"
 #include "fawkes/request.hpp"
 #include "fawkes/response.hpp"
 #include "fawkes/server.hpp"
 
-DEFINE_uint32(port, 7890, "Port number to listen");
+namespace asio = boost::asio;
+namespace urls = boost::urls;
+namespace http = boost::beast::http;
+
+DEFINE_uint32(port, 7890, "Port number to listen on");
 
 struct log_access {
     static fawkes::middleware_result pre_handle(fawkes::request& req, fawkes::response& /*resp*/) {
@@ -51,20 +59,32 @@ struct tracking_id {
     }
 };
 
-int main() {
+int main(int argc, char* argv[]) {
     try {
-        boost::asio::io_context io_ctx{1};
+        gflags::ParseCommandLineFlags(&argc, &argv, true);
+
+        asio::io_context io_ctx{1};
 
         fawkes::server svc(io_ctx);
 
+        fawkes::cors cors{fawkes::cors::options{
+            .allow_origin_policy = fawkes::cors::allow_origin_if(
+                [](std::string_view origin) {
+                    const urls::url_view url(origin);
+                    return url.host() == "deadbeef.me";
+                }),
+            .allow_methods{http::verb::get, http::verb::post, http::verb::options},
+            .allow_headers{http::field::content_type},
+            .expose_headers{}}};
+
         // Global middlewares, shared by all routes.
-        svc.get_router().use(log_access{});
+        svc.get_router().use(log_access{}, std::move(cors));
 
         // Per-route middlewares.
         svc.do_get("/now",
                    fawkes::middlewares::use(tracking_id{}),
                    [](const fawkes::request& req, fawkes::response& resp)
-                       -> boost::asio::awaitable<void> {
+                       -> asio::awaitable<void> {
                        esl::ignore_unused(req);
                        auto tp = std::chrono::system_clock::now();
                        resp.mutable_body() = fmt::format("{}", tp);
@@ -73,11 +93,27 @@ int main() {
 
         svc.do_get("/healthcheck",
                    [](const fawkes::request& req, fawkes::response& resp)
-                       -> boost::asio::awaitable<void> {
+                       -> asio::awaitable<void> {
                        esl::ignore_unused(req);
                        resp.mutable_body() = "pong";
                        co_return;
                    });
+
+        svc.do_get("/simple",
+                   [](const fawkes::request& req, fawkes::response& resp)
+                       -> asio::awaitable<void> {
+                       esl::ignore_unused(req);
+                       resp.mutable_body() = "response for simple request";
+                       co_return;
+                   });
+
+        svc.do_post("/preflight",
+                    [](const fawkes::request& req, fawkes::response& resp)
+                        -> asio::awaitable<void> {
+                        resp.mutable_body() = fmt::format(
+                            "response for request that needs preflight: {}", req.body());
+                        co_return;
+                    });
 
         svc.listen_and_serve("0.0.0.0", static_cast<std::uint16_t>(FLAGS_port));
         SPDLOG_INFO("Server is listening at {}", FLAGS_port);

@@ -56,7 +56,7 @@ public:
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H>
     void do_post(std::string_view path, H&& handler) {
-        router_.add_route(http::verb::post, path, std::forward(handler));
+        router_.add_route(http::verb::post, path, std::forward<H>(handler));
     }
 
     // Throws `std::invalid_argument` if there is path conflict.

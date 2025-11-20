@@ -29,7 +29,7 @@ template<typename T>
 struct StringMaker<std::list<T>> {
     static String convert(const std::list<T>& in) {
         auto s = fmt::to_string(in);
-        return String(s.data(), s.size());
+        return String(s.data(), static_cast<String::size_type>(s.size()));
     }
 };
 
@@ -37,7 +37,7 @@ template<typename T>
 struct StringMaker<std::deque<T>> {
     static String convert(const std::deque<T>& in) {
         auto s = fmt::to_string(in);
-        return String(s.data(), s.size());
+        return String(s.data(), static_cast<String::size_type>(s.size()));
     }
 };
 
@@ -45,7 +45,7 @@ template<typename T>
 struct StringMaker<std::set<T>> {
     static String convert(const std::set<T>& in) {
         auto s = fmt::to_string(in);
-        return String(s.data(), s.size());
+        return String(s.data(), static_cast<String::size_type>(s.size()));
     }
 };
 
@@ -53,7 +53,7 @@ template<typename T>
 struct StringMaker<std::unordered_set<T>> {
     static String convert(const std::unordered_set<T>& in) {
         auto s = fmt::to_string(in);
-        return String(s.data(), s.size());
+        return String(s.data(), static_cast<String::size_type>(s.size()));
     }
 };
 
@@ -61,7 +61,7 @@ template<typename K, typename V>
 struct StringMaker<std::map<K, V>> {
     static String convert(const std::map<K, V>& in) {
         auto s = fmt::to_string(in);
-        return String(s.data(), s.size());
+        return String(s.data(), static_cast<String::size_type>(s.size()));
     }
 };
 
@@ -69,7 +69,7 @@ template<typename K, typename V>
 struct StringMaker<std::unordered_map<K, V>> {
     static String convert(const std::unordered_map<K, V>& in) {
         auto s = fmt::to_string(in);
-        return String(s.data(), s.size());
+        return String(s.data(), static_cast<String::size_type>(s.size()));
     }
 };
 

@@ -16,10 +16,12 @@
 #include "fawkes/response.hpp"
 #include "fawkes/server.hpp"
 
-DEFINE_uint32(port, 9876, "Port number to listen");
+DEFINE_uint32(port, 7890, "Port number to listen on");
 
-int main() {
+int main(int argc, char* argv[]) {
     try {
+        gflags::ParseCommandLineFlags(&argc, &argv, true);
+
         boost::asio::io_context io_ctx{1};
         fawkes::server svc(io_ctx);
         svc.do_get("/ping",
@@ -27,7 +29,7 @@ int main() {
                        -> boost::asio::awaitable<void> {
                        auto q = req.queries().get("q");
                        if (q.has_value()) {
-                           spdlog::info("q={}", *q);
+                           SPDLOG_INFO("q={}", *q);
                        }
                        resp.mutable_body() = "Pong!";
                        co_return;
@@ -47,10 +49,10 @@ int main() {
                        co_return;
                    });
         svc.listen_and_serve("0.0.0.0", static_cast<std::uint16_t>(FLAGS_port));
-        spdlog::info("ping-pong server is listenning at {}", FLAGS_port);
+        SPDLOG_INFO("ping-pong server is listenning at {}", FLAGS_port);
         io_ctx.run();
     } catch (const std::exception& ex) {
-        spdlog::error("Unexpected error: {}", ex.what());
+        SPDLOG_ERROR("Unexpected error: {}", ex.what());
     }
 
     return 0;
