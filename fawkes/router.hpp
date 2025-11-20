@@ -51,8 +51,7 @@ public:
                    std::tuple<Mws...>&& middlewares,
                    H&& handler) {
         route_handler_t route_handler =
-            [this,
-             mws = std::move(middlewares),
+            [mws = std::move(middlewares),
              user_handler = std::forward<H>(handler)](request& req, response& resp) mutable
             -> asio::awaitable<void> {
             using enum middleware_result;
@@ -90,7 +89,7 @@ public:
     }
 
 private:
-    boost::unordered::unordered_flat_map<beast::http::verb, node> routes_;
+    boost::unordered_flat_map<beast::http::verb, node> routes_;
     middleware_chain base_middlewares_;
 };
 

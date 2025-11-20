@@ -7,6 +7,8 @@ target_sources(fawkes
   PRIVATE
     errors.hpp
     middleware.hpp
+    middlewares/cors.cpp
+    middlewares/cors.hpp
     path_params.hpp
     query_params.hpp
     request.cpp
@@ -70,6 +72,7 @@ target_sources(fawkes.tests
   PRIVATE
     test_main.cpp
 
+    middlewares/cors_test.cpp
     request_test.cpp
     router_test.cpp
     tree_test.cpp
