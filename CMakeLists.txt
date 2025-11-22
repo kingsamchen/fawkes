@@ -58,6 +58,7 @@ endif()
 
 include(${FAWKES_CMAKE_DIR}/clang_tidy.cmake)
 include(${FAWKES_CMAKE_DIR}/sanitizer.cmake)
+include(${FAWKES_CMAKE_DIR}/utils.cmake)
 
 find_package(Boost CONFIG REQUIRED COMPONENTS asio)
 find_package(Boost CONFIG REQUIRED COMPONENTS beast)
@@ -94,8 +95,4 @@ if(FAWKES_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
 
-file(CREATE_LINK
-  "${CMAKE_BINARY_DIR}/compile_commands.json"
-  "${CMAKE_BINARY_DIR}/../compile_commands.json"
-  SYMBOLIC
-)
+setup_compile_db()

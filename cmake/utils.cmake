@@ -18,3 +18,13 @@ function(get_target_type TARGET TARGET_TYPE)
     message(FATAL_ERROR "Target ${TARGET} unknown type ${target_type}")
   endif()
 endfunction()
+
+function(setup_compile_db)
+  if(NOT CMAKE_GENERATOR MATCHES "Visual Studio")
+    file(CREATE_LINK
+      "${CMAKE_BINARY_DIR}/compile_commands.json"
+      "${CMAKE_BINARY_DIR}/../compile_commands.json"
+      SYMBOLIC
+    )
+  endif()
+endfunction()
