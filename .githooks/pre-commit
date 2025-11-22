@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+export PYTHONWARNINGS="ignore::DeprecationWarning"
+
 hook_dir="$(dirname "${BASH_SOURCE[0]}")"
 scripts_dir="${hook_dir}/scripts"
 
