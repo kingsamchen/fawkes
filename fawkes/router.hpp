@@ -5,15 +5,20 @@
 #pragma once
 
 #include <concepts>
+#include <exception>
 #include <string_view>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 
 #include <boost/asio/awaitable.hpp>
+#include <boost/beast/http/status.hpp>
 #include <boost/beast/http/verb.hpp>
+#include <boost/json/object.hpp>
+#include <boost/json/serialize.hpp>
 #include <boost/unordered/unordered_flat_map.hpp>
-#include <esl/ignore_unused.h>
 
+#include "fawkes/errors.hpp"
 #include "fawkes/middleware.hpp"
 #include "fawkes/path_params.hpp"
 #include "fawkes/tree.hpp"
@@ -22,6 +27,8 @@ namespace fawkes {
 
 namespace asio = boost::asio;
 namespace beast = boost::beast;
+namespace http = boost::beast::http;
+namespace json = boost::json;
 
 template<typename T>
 struct is_asio_awaitable : std::false_type {};
@@ -53,20 +60,34 @@ public:
         route_handler_t route_handler =
             [mws = std::move(middlewares),
              user_handler = std::forward<H>(handler)](request& req, response& resp) mutable
-            -> asio::awaitable<void> {
+            -> asio::awaitable<middleware_result> {
             using enum middleware_result;
 
-            if (base_middlewares_.pre_handle(req, resp) == abort ||
-                detail::run_middlewares_pre_handle(mws, req, resp) == abort) {
-                co_return;
+            // Throwing from user handler would not abort either per-route middlewares or
+            // router-level middlewares.
+            // However, throwing from any middleware would be like aborting from the middleware.
+
+            if (detail::run_middlewares_pre_handle(mws, req, resp) == abort) {
+                co_return abort;
             }
 
-            co_await user_handler(std::as_const(req), resp);
-
-            if (detail::run_middlewares_post_handle(mws, req, resp) == abort) {
-                co_return;
+            try {
+                co_await user_handler(std::as_const(req), resp);
+            } catch (const http_error& ex) {
+                json::object err{{"message", ex.what()}};
+                if (const auto& ec = ex.error_code(); ec.has_value()) {
+                    err["code"] = *ec;
+                }
+                const json::object body{{"error", std::move(err)}};
+                resp.as_mutable_impl().result(ex.status_code());
+                resp.as_mutable_impl().body() = json::serialize(body);
+            } catch (const std::exception& ex) {
+                const json::object body{{"error", json::object{{"message", ex.what()}}}};
+                resp.as_mutable_impl().result(http::status::internal_server_error);
+                resp.as_mutable_impl().body() = json::serialize(body);
             }
-            esl::ignore_unused(base_middlewares_.post_handle(req, resp));
+
+            co_return detail::run_middlewares_post_handle(mws, req, resp);
         };
         routes_[verb].add_route(path, std::move(route_handler));
     }
@@ -86,6 +107,14 @@ public:
     template<is_middleware... Mws>
     void use(Mws... mws) {
         base_middlewares_.set(std::make_tuple(std::move(mws)...));
+    }
+
+    [[nodiscard]] middleware_result run_pre_handle(request& req, response& resp) const {
+        return base_middlewares_.pre_handle(req, resp);
+    }
+
+    [[nodiscard]] middleware_result run_post_handle(request& req, response& resp) const {
+        return base_middlewares_.post_handle(req, resp);
     }
 
 private:

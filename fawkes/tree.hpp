@@ -14,18 +14,19 @@
 #include <vector>
 
 #include <boost/asio/awaitable.hpp>
-#include <esl/ignore_unused.h>
 #include <esl/strings.h>
 #include <esl/utility.h>
 #include <fmt/format.h>
 
+#include "fawkes/middleware.hpp"
 #include "fawkes/path_params.hpp"
 #include "fawkes/request.hpp"
 #include "fawkes/response.hpp"
 
 namespace fawkes {
 
-using route_handler_t = std::function<boost::asio::awaitable<void>(request&, response&)>;
+using route_handler_t =
+    std::function<boost::asio::awaitable<middleware_result>(request&, response&)>;
 
 namespace detail {
 

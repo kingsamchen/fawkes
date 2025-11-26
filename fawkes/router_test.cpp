@@ -283,7 +283,7 @@ TEST_CASE("Abort from post handle") {
 }
 
 TEST_CASE("No-op for empty middleware chain") {
-    fawkes::middleware_chain mc;
+    const fawkes::middleware_chain mc;
     fawkes::request req;
     fawkes::response resp;
     CHECK_EQ(mc.pre_handle(req, resp), fawkes::middleware_result::proceed);
