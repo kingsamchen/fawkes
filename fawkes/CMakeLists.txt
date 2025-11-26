@@ -13,6 +13,7 @@ target_sources(fawkes
     query_params.hpp
     request.cpp
     request.hpp
+    response.hpp
     router.cpp
     router.hpp
     server.cpp

@@ -7,6 +7,7 @@
 #include <string_view>
 #include <utility>
 
+#include <boost/beast/http/status.hpp>
 #include <boost/url/parse.hpp>
 #include <boost/url/parse_query.hpp>
 #include <spdlog/spdlog.h>
@@ -32,7 +33,7 @@ request::request(impl_type&& req_impl)
         // Discard whole query string if it is malformed.
         const auto or_query = urls::parse_query(target.substr(pos + 1));
         if (or_query.has_error()) {
-            spdlog::error("malformed query string discarded");
+            SPDLOG_ERROR("malformed query string discarded");
         } else {
             url_.encoded_params().assign(or_query->begin(), or_query->end());
         }

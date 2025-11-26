@@ -4,8 +4,12 @@
 
 #pragma once
 
+#include <utility>
+
+#include <boost/beast/http/field.hpp>
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/string_body.hpp>
+#include <boost/beast/version.hpp>
 
 namespace fawkes {
 
@@ -14,6 +18,17 @@ namespace beast = boost::beast;
 class response {
 public:
     using impl_type = beast::http::response<beast::http::string_body>;
+
+    response() = default;
+
+    explicit response(impl_type&& resp_impl)
+        : impl_(std::move(resp_impl)) {}
+
+    response(unsigned int version, bool keep_alive) {
+        impl_.version(version);
+        impl_.keep_alive(keep_alive);
+        impl_.set(beast::http::field::server, BOOST_BEAST_VERSION_STRING);
+    }
 
     [[nodiscard]] const impl_type::header_type& header() const noexcept {
         return impl_.base();

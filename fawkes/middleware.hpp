@@ -144,7 +144,7 @@ public:
         };
     }
 
-    middleware_result pre_handle(request& req, response& resp) {
+    [[nodiscard]] middleware_result pre_handle(request& req, response& resp) const {
         if (!pre_impl_) {
             return middleware_result::proceed;
         }
@@ -152,7 +152,7 @@ public:
         return pre_impl_(req, resp);
     }
 
-    middleware_result post_handle(request& req, response& resp) {
+    [[nodiscard]] middleware_result post_handle(request& req, response& resp) const {
         if (!post_impl_) {
             return middleware_result::proceed;
         }

@@ -4,6 +4,7 @@
 
 #include "fawkes/server.hpp"
 
+#include <exception>
 #include <functional>
 #include <string>
 #include <utility>
@@ -13,27 +14,33 @@
 #include <boost/asio/detached.hpp>
 #include <boost/asio/error.hpp>
 #include <boost/beast/core.hpp>
-#include <boost/beast/http.hpp>
 #include <boost/beast/http/error.hpp>
+#include <boost/beast/http/field.hpp>
 #include <boost/beast/http/read.hpp>
+#include <boost/beast/http/status.hpp>
+#include <boost/beast/http/string_body.hpp>
 #include <boost/beast/version.hpp>
 #include <boost/json/object.hpp>
 #include <boost/json/serialize.hpp>
 #include <boost/system/system_error.hpp>
+#include <esl/ignore_unused.h>
 #include <fmt/ostream.h>
 #include <spdlog/spdlog.h>
 
-#include "fawkes/errors.hpp"
+#include "fawkes/middleware.hpp"
+#include "fawkes/request.hpp"
+#include "fawkes/response.hpp"
 
 namespace fawkes {
-namespace {
 
 namespace json = boost::json;
 
-http::response<http::string_body> make_error_response(unsigned int http_version,
-                                                      bool keep_alive,
-                                                      http::status status_code,
-                                                      std::string&& body) {
+namespace {
+
+http::response<http::string_body> make_unexpected_error_response(unsigned int http_version,
+                                                                 bool keep_alive,
+                                                                 http::status status_code,
+                                                                 std::string&& body) {
     http::response<http::string_body> resp{status_code, http_version};
     resp.set(http::field::server, BOOST_BEAST_VERSION_STRING);
     resp.set(http::field::content_type, "application/json");
@@ -41,6 +48,12 @@ http::response<http::string_body> make_error_response(unsigned int http_version,
     resp.body() = std::move(body);
     resp.prepare_payload();
     return resp;
+}
+
+response::impl_type&& prepare_response(response& resp) {
+    auto& impl = resp.as_mutable_impl();
+    impl.prepare_payload();
+    return std::move(impl);
 }
 
 } // namespace
@@ -62,10 +75,10 @@ asio::awaitable<void> server::do_listen() {
         auto [ec, sock] = co_await acceptor_.async_accept(asio::as_tuple);
         if (ec) {
             if (ec == asio::error::operation_aborted) {
-                spdlog::debug("Acceptor is closed");
+                SPDLOG_DEBUG("Acceptor is closed");
                 co_return;
             }
-            spdlog::error("Failed to accept new connection; ec={}", fmt::streamed(ec));
+            SPDLOG_ERROR("Failed to accept new connection; ec={}", fmt::streamed(ec));
             continue;
         }
 
@@ -102,38 +115,49 @@ asio::awaitable<http::message_generator> server::handle_request(
     http::request<http::string_body> req) const {
     const auto http_ver = req.version();
     const auto keep_alive = req.keep_alive();
+
     try {
         request fwk_req(std::move(req));
+        response fwk_resp(http_ver, keep_alive);
 
+        // Locating route completes path params for a request, and may be used in
+        // a middleware.
         const auto* handler = router_.locate_route(fwk_req.header().method(),
                                                    fwk_req.path(),
                                                    fwk_req.mutable_params());
+
+        if (router_.run_pre_handle(fwk_req, fwk_resp) == middleware_result::abort) {
+            co_return prepare_response(fwk_resp);
+        }
+
+        // User handler not found is not an unexpected error and thus should not abort
+        // router-level middlewares.
         if (!handler) {
-            throw http_error(http::status::not_found, "Unknown resource");
+            const json::object body{
+                {"error", json::object{{"message", "Unknown resource"}}}};
+            fwk_resp.as_mutable_impl().result(http::status::not_found);
+            fwk_resp.as_mutable_impl().set(http::field::content_type, "application/json");
+            fwk_resp.as_mutable_impl().body() = json::serialize(body);
+            esl::ignore_unused(router_.run_post_handle(fwk_req, fwk_resp));
+            co_return prepare_response(fwk_resp);
         }
 
-        response faw_resp;
-        co_await (*handler)(fwk_req, faw_resp);
+        const auto result = co_await (*handler)(fwk_req, fwk_resp);
 
-        auto& resp_impl = faw_resp.as_mutable_impl();
-        resp_impl.version(http_ver);
-        resp_impl.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        resp_impl.keep_alive(keep_alive);
-        resp_impl.prepare_payload();
-
-        co_return std::move(resp_impl);
-    } catch (const http_error& ex) {
-        json::object err{{"message", ex.what()}};
-        if (const auto& ec = ex.error_code(); ec.has_value()) {
-            err["code"] = *ec;
+        // Aborted by a per-route middleware.
+        if (result == middleware_result::abort) {
+            co_return prepare_response(fwk_resp);
         }
-        const json::object body{{"error", std::move(err)}};
-        co_return make_error_response(http_ver, keep_alive, ex.status_code(),
-                                      json::serialize(body));
+
+        esl::ignore_unused(router_.run_post_handle(fwk_req, fwk_resp));
+
+        co_return prepare_response(fwk_resp);
     } catch (const std::exception& ex) {
         const json::object body{{"error", json::object{{"message", ex.what()}}}};
-        co_return make_error_response(http_ver, keep_alive, http::status::internal_server_error,
-                                      json::serialize(body));
+        co_return make_unexpected_error_response(http_ver,
+                                                 keep_alive,
+                                                 http::status::internal_server_error,
+                                                 json::serialize(body));
     }
 }
 
@@ -144,14 +168,14 @@ void server::handle_session_error(const asio::ip::tcp::endpoint& remote, std::ex
             std::rethrow_exception(eptr);
         } catch (const boost::system::system_error& ex) {
             if (ex.code() == http::error::end_of_stream) {
-                spdlog::debug("Remote session closed; remote={}", fmt::streamed(remote));
+                SPDLOG_DEBUG("Remote session closed; remote={}", fmt::streamed(remote));
             } else {
-                spdlog::error("Unhandled system error for session; remote={} what={}",
-                              fmt::streamed(remote), ex.what());
+                SPDLOG_ERROR("Unhandled system error for session; remote={} what={}",
+                             fmt::streamed(remote), ex.what());
             }
         } catch (const std::exception& ex) {
-            spdlog::error("Unhandled error for session; remote={} what={}",
-                          fmt::streamed(remote), ex.what());
+            SPDLOG_ERROR("Unhandled error for session; remote={} what={}",
+                         fmt::streamed(remote), ex.what());
         }
     }
 }

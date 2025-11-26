@@ -5,6 +5,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/string_body.hpp>

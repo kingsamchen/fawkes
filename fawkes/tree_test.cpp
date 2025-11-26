@@ -9,6 +9,7 @@
 #include <doctest/doctest.h>
 #include <fmt/format.h>
 
+#include "fawkes/middleware.hpp"
 #include "fawkes/path_params.hpp"
 #include "fawkes/tree.hpp"
 
@@ -70,8 +71,9 @@ struct fmt::formatter<fawkes::detail::param> {
 namespace {
 
 auto fake_handler() {
-    return [](const fawkes::request&, fawkes::response&) -> asio::awaitable<void> {
-        co_return;
+    return [](const fawkes::request&, fawkes::response&)
+               -> asio::awaitable<fawkes::middleware_result> {
+        co_return fawkes::middleware_result::proceed;
     };
 }
 
@@ -498,12 +500,14 @@ TEST_CASE("Locate non-wild path") {
     fawkes::node tree;
     std::string handler_path;
     for (const auto path : paths) {
-        tree.add_route(path, [&handler_path, path](const auto&, auto&) -> asio::awaitable<void> {
-            handler_path = path;
-            return []() -> asio::awaitable<void> {
-                co_return;
-            }();
-        });
+        tree.add_route(path,
+                       [&handler_path, path](const auto&, auto&)
+                           -> asio::awaitable<fawkes::middleware_result> {
+                           handler_path = path;
+                           return []() -> asio::awaitable<fawkes::middleware_result> {
+                               co_return fawkes::middleware_result::proceed;
+                           }();
+                       });
     }
 
     const locate_request requests[]{
@@ -554,12 +558,14 @@ TEST_CASE("Locate wildcard path") {
     fawkes::node tree;
     std::string handler_path;
     for (const auto path : paths) {
-        tree.add_route(path, [&handler_path, path](const auto&, auto&) -> asio::awaitable<void> {
-            handler_path = path;
-            return []() -> asio::awaitable<void> {
-                co_return;
-            }();
-        });
+        tree.add_route(path,
+                       [&handler_path, path](const auto&, auto&)
+                           -> asio::awaitable<fawkes::middleware_result> {
+                           handler_path = path;
+                           return []() -> asio::awaitable<fawkes::middleware_result> {
+                               co_return fawkes::middleware_result::proceed;
+                           }();
+                       });
     }
 
     const locate_request requests[]{
