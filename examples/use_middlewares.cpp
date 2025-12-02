@@ -10,6 +10,7 @@
 
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/io_context.hpp>
+#include <boost/beast/http/status.hpp>
 #include <boost/beast/http/verb.hpp>
 #include <boost/url.hpp>
 #include <esl/ignore_unused.h>
@@ -37,22 +38,22 @@ struct log_access {
     }
 
     static fawkes::middleware_result post_handle(fawkes::request& req, fawkes::response& resp) {
-        SPDLOG_INFO("Leave {} -> {}", req.target(), resp.as_impl().result_int());
+        SPDLOG_INFO("Leave {} -> {}", req.target(), resp.status_code());
         return fawkes::middleware_result::proceed;
     }
 };
 
 struct tracking_id {
     static fawkes::middleware_result pre_handle(fawkes::request& req, fawkes::response& resp) {
-        constexpr std::string_view name = "x-tracking-id";
+        static constexpr std::string_view name = "x-tracking-id";
         if (const auto it = req.header().find(name); it == req.header().end()) {
             SPDLOG_INFO("Tracking-id not found in request, generate on the fly");
             const auto ts = std::chrono::system_clock::now().time_since_epoch().count();
             const std::string new_id = fmt::to_string(ts);
-            req.mutable_header().insert(name, new_id);
-            resp.mutable_header().insert(name, new_id);
+            req.header().set(name, new_id);
+            resp.header().set(name, new_id);
         } else {
-            resp.mutable_header().insert(name, it->value());
+            resp.header().set(name, it->value());
         }
 
         return fawkes::middleware_result::proceed;
@@ -87,7 +88,7 @@ int main(int argc, char* argv[]) {
                        -> asio::awaitable<void> {
                        esl::ignore_unused(req);
                        auto tp = std::chrono::system_clock::now();
-                       resp.mutable_body() = fmt::format("{}", tp);
+                       resp.text(http::status::ok, fmt::format("{}", tp));
                        co_return;
                    });
 
@@ -95,23 +96,26 @@ int main(int argc, char* argv[]) {
                    [](const fawkes::request& req, fawkes::response& resp)
                        -> asio::awaitable<void> {
                        esl::ignore_unused(req);
-                       resp.mutable_body() = "pong";
+                       resp.text(http::status::ok, std::string{"Pong"});
                        co_return;
                    });
+
+        // CORS support via the global middleware.
 
         svc.do_get("/simple",
                    [](const fawkes::request& req, fawkes::response& resp)
                        -> asio::awaitable<void> {
                        esl::ignore_unused(req);
-                       resp.mutable_body() = "response for simple request";
+                       resp.text(http::status::ok, std::string{"response for simple request"});
                        co_return;
                    });
 
         svc.do_post("/preflight",
                     [](const fawkes::request& req, fawkes::response& resp)
                         -> asio::awaitable<void> {
-                        resp.mutable_body() = fmt::format(
-                            "response for request that needs preflight: {}", req.body());
+                        auto body = fmt::format("response for request that needs preflight: {}",
+                                                req.body());
+                        resp.text(http::status::ok, std::move(body));
                         co_return;
                     });
 

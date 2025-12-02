@@ -28,15 +28,24 @@ public:
     // Throws `http_error` if path part of the URL is invalid.
     explicit request(impl_type&& req_impl);
 
-    [[nodiscard]] const std::string& path() const noexcept {
+    // Path part of a request target, any percent-escapes are decoded.
+    [[nodiscard]] std::string_view path() const noexcept {
         return path_;
+    }
+
+    // Request target in http request, may contain percent-escapes.
+    // Equals to `as_impl().target()` if whole target is valid, i.e. percent-decoded.
+    // If query string of the `as_impl().target()` contains invalid characters, `target()`
+    // discards entire query string.
+    [[nodiscard]] std::string_view target() const noexcept {
+        return std::string_view{url_.data(), url_.size()};
     }
 
     [[nodiscard]] const path_params& params() const noexcept {
         return ps_;
     }
 
-    [[nodiscard]] path_params& mutable_params() noexcept {
+    [[nodiscard]] path_params& params() noexcept {
         return ps_;
     }
 
@@ -45,7 +54,7 @@ public:
         return query_params_view(ps);
     }
 
-    [[nodiscard]] query_params_ref mutable_queries() noexcept {
+    [[nodiscard]] query_params_ref queries() noexcept {
         const urls::params_ref ps = url_.params();
         return query_params_ref(ps);
     }
@@ -54,7 +63,7 @@ public:
         return impl_.base();
     }
 
-    [[nodiscard]] impl_type::header_type& mutable_header() noexcept {
+    [[nodiscard]] impl_type::header_type& header() noexcept {
         return impl_.base();
     }
 
@@ -62,22 +71,15 @@ public:
         return impl_.body();
     }
 
-    [[nodiscard]] auto& mutable_body() noexcept {
+    [[nodiscard]] auto& body() noexcept {
         return impl_.body();
-    }
-
-    // Equals to `as_impl().target()` if whole target is valid, i.e. percent-decoded.
-    // If query string of the `as_impl().target()` contains invalid characters, `target()`
-    // discards entire query string.
-    [[nodiscard]] std::string_view target() const noexcept {
-        return std::string_view{url_.data(), url_.size()};
     }
 
     [[nodiscard]] const impl_type& as_impl() const noexcept {
         return impl_;
     }
 
-    [[nodiscard]] impl_type& as_mutable_impl() noexcept {
+    [[nodiscard]] impl_type& as_impl() noexcept {
         return impl_;
     }
 
@@ -87,5 +89,8 @@ private:
     std::string path_; // Percent-decoded.
     path_params ps_;
 };
+
+static_assert(std::is_nothrow_move_constructible_v<request> &&
+              std::is_nothrow_move_assignable_v<request>);
 
 } // namespace fawkes

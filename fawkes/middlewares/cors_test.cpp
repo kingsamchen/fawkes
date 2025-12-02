@@ -66,9 +66,9 @@ TEST_CASE("Allow an origin that meets predicate") {
 
 TEST_CASE("Handle simple CORS request") {
     fawkes::request req;
-    req.mutable_header().set("Origin", "http://deadbeef.me:8080");
-    req.mutable_header().set("Host", "cors-test.com");
-    req.mutable_header().method(http::verb::get);
+    req.header().set("Origin", "http://deadbeef.me:8080");
+    req.header().set("Host", "cors-test.com");
+    req.header().method(http::verb::get);
 
     fawkes::response resp;
     const fawkes::cors::options opts{.allow_origin_policy = fawkes::cors::allow_origin_if(
@@ -89,9 +89,9 @@ TEST_CASE("Handle simple CORS request") {
 
 TEST_CASE("Handle preflight request") {
     fawkes::request req;
-    req.mutable_header().set("Origin", "http://deadbeef.me:8080");
-    req.mutable_header().set("Host", "cors-test.com");
-    req.mutable_header().method(http::verb::options);
+    req.header().set("Origin", "http://deadbeef.me:8080");
+    req.header().set("Host", "cors-test.com");
+    req.header().method(http::verb::options);
 
     fawkes::response resp;
     const fawkes::cors::options opts{.allow_origin_policy = fawkes::cors::allow_origin_if(

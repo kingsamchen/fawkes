@@ -9,6 +9,7 @@ target_sources(fawkes
     middleware.hpp
     middlewares/cors.cpp
     middlewares/cors.hpp
+    mime.hpp
     path_params.hpp
     query_params.hpp
     request.cpp
