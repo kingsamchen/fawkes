@@ -79,12 +79,10 @@ public:
                     err["code"] = *ec;
                 }
                 const json::object body{{"error", std::move(err)}};
-                resp.as_mutable_impl().result(ex.status_code());
-                resp.as_mutable_impl().body() = json::serialize(body);
+                resp.json(ex.status_code(), json::serialize(body));
             } catch (const std::exception& ex) {
                 const json::object body{{"error", json::object{{"message", ex.what()}}}};
-                resp.as_mutable_impl().result(http::status::internal_server_error);
-                resp.as_mutable_impl().body() = json::serialize(body);
+                resp.json(http::status::internal_server_error, json::serialize(body));
             }
 
             co_return detail::run_middlewares_post_handle(mws, req, resp);

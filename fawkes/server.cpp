@@ -28,6 +28,7 @@
 #include <spdlog/spdlog.h>
 
 #include "fawkes/middleware.hpp"
+#include "fawkes/mime.hpp"
 #include "fawkes/request.hpp"
 #include "fawkes/response.hpp"
 
@@ -39,11 +40,10 @@ namespace {
 
 http::response<http::string_body> make_unexpected_error_response(unsigned int http_version,
                                                                  bool keep_alive,
-                                                                 http::status status_code,
                                                                  std::string&& body) {
-    http::response<http::string_body> resp{status_code, http_version};
+    http::response<http::string_body> resp{http::status::internal_server_error, http_version};
     resp.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-    resp.set(http::field::content_type, "application/json");
+    resp.set(http::field::content_type, mime::json);
     resp.keep_alive(keep_alive);
     resp.body() = std::move(body);
     resp.prepare_payload();
@@ -51,7 +51,7 @@ http::response<http::string_body> make_unexpected_error_response(unsigned int ht
 }
 
 response::impl_type&& prepare_response(response& resp) {
-    auto& impl = resp.as_mutable_impl();
+    auto& impl = resp.as_impl();
     impl.prepare_payload();
     return std::move(impl);
 }
@@ -122,9 +122,9 @@ asio::awaitable<http::message_generator> server::handle_request(
 
         // Locating route completes path params for a request, and may be used in
         // a middleware.
-        const auto* handler = router_.locate_route(fwk_req.header().method(),
-                                                   fwk_req.path(),
-                                                   fwk_req.mutable_params());
+        const auto* handler = router_.locate_route(std::as_const(fwk_req).header().method(),
+                                                   std::as_const(fwk_req).path(),
+                                                   fwk_req.params());
 
         if (router_.run_pre_handle(fwk_req, fwk_resp) == middleware_result::abort) {
             co_return prepare_response(fwk_resp);
@@ -135,9 +135,7 @@ asio::awaitable<http::message_generator> server::handle_request(
         if (!handler) {
             const json::object body{
                 {"error", json::object{{"message", "Unknown resource"}}}};
-            fwk_resp.as_mutable_impl().result(http::status::not_found);
-            fwk_resp.as_mutable_impl().set(http::field::content_type, "application/json");
-            fwk_resp.as_mutable_impl().body() = json::serialize(body);
+            fwk_resp.json(http::status::not_found, json::serialize(body));
             esl::ignore_unused(router_.run_post_handle(fwk_req, fwk_resp));
             co_return prepare_response(fwk_resp);
         }
@@ -156,7 +154,6 @@ asio::awaitable<http::message_generator> server::handle_request(
         const json::object body{{"error", json::object{{"message", ex.what()}}}};
         co_return make_unexpected_error_response(http_ver,
                                                  keep_alive,
-                                                 http::status::internal_server_error,
                                                  json::serialize(body));
     }
 }

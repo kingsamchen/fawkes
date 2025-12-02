@@ -42,21 +42,21 @@ middleware_result cors::pre_handle(request& req, response& resp) const {
     }
 
     if (!is_origin_allowed(origin_it->value())) {
-        resp.as_mutable_impl().result(http::status::forbidden);
+        resp.set_status(http::status::forbidden);
         return middleware_result::abort;
     }
 
     if (!std::holds_alternative<allow_origin_all>(allow_origin_policy_)) {
-        resp.mutable_header().set(http::field::access_control_allow_origin, origin_it->value());
+        resp.header().set(http::field::access_control_allow_origin, origin_it->value());
     }
 
     if (req.header().method() == http::verb::options) {
-        handle_preflight(resp.mutable_header());
-        resp.as_mutable_impl().result(options_resp_status_);
+        handle_preflight(resp.header());
+        resp.set_status(options_resp_status_);
         return middleware_result::abort;
     }
 
-    handle_normal_cors(resp.mutable_header());
+    handle_normal_cors(resp.header());
 
     return middleware_result::proceed;
 }
