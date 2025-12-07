@@ -7,21 +7,23 @@
 #include <string>
 #include <string_view>
 
+#include <boost/beast/http/field.hpp>
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/string_body.hpp>
 #include <boost/url/url.hpp>
 
+#include "fawkes/cookie.hpp"
 #include "fawkes/path_params.hpp"
 #include "fawkes/query_params.hpp"
 
 namespace fawkes {
 
-namespace beast = boost::beast;
 namespace urls = boost::urls;
+namespace http = boost::beast::http;
 
 class request {
 public:
-    using impl_type = beast::http::request<beast::http::string_body>;
+    using impl_type = http::request<http::string_body>;
 
     request() = default;
 
@@ -66,6 +68,14 @@ public:
     [[nodiscard]] impl_type::header_type& header() noexcept {
         return impl_.base();
     }
+
+    [[nodiscard]] cookie_view cookies() const {
+        auto [begin, end] = header().equal_range(http::field::cookie);
+        return cookie_view(begin, end);
+    }
+
+    // TODO(KC): add set_cookies() for http-client uses, and set header directly to avoid extra
+    // bookkeeping.
 
     [[nodiscard]] const auto& body() const noexcept {
         return impl_.body();

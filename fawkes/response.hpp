@@ -15,6 +15,7 @@
 #include <boost/beast/http/string_body.hpp>
 #include <boost/beast/version.hpp>
 
+#include "fawkes/cookie.hpp"
 #include "fawkes/mime.hpp"
 
 namespace fawkes {
@@ -86,6 +87,16 @@ public:
         impl_.set(http::field::content_type, mime::json);
         impl_.body() = std::move(data);
     }
+
+    void add_set_cookie(const cookie& cookie) {
+        const auto value = cookie.to_string();
+        if (!value.empty()) {
+            header().insert(http::field::cookie, value);
+        }
+    }
+
+    // TODO(KC): add set_cookies() for http-client uses, and it should parse all Set-Cookie headers
+    // and return them.
 
     [[nodiscard]] const auto& body() const noexcept {
         return impl_.body();
