@@ -5,6 +5,8 @@ add_library(fawkes::fawkes ALIAS fawkes)
 
 target_sources(fawkes
   PRIVATE
+    cookie.cpp
+    cookie.hpp
     errors.hpp
     middleware.hpp
     middlewares/cors.cpp
@@ -14,6 +16,7 @@ target_sources(fawkes
     query_params.hpp
     request.cpp
     request.hpp
+    response.cpp
     response.hpp
     router.cpp
     router.hpp
@@ -74,6 +77,7 @@ target_sources(fawkes.tests
   PRIVATE
     test_main.cpp
 
+    cookie_test.cpp
     middlewares/cors_test.cpp
     request_test.cpp
     router_test.cpp
