@@ -28,7 +28,7 @@ fawkes_clang_tidy_on_build(ping_pong_svc)
 get_target_property(ping_pong_svc_FILES ping_pong_svc SOURCES)
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${ping_pong_svc_FILES})
 
-target_precompile_headers(ping_pong_svc REUSE_FROM fawkes.pch)
+target_precompile_headers(ping_pong_svc REUSE_FROM fawkes::pch)
 
 #
 # Using middlewares
@@ -58,4 +58,4 @@ fawkes_clang_tidy_on_build(use_middlewares)
 get_target_property(use_middlewares_FILES use_middlewares SOURCES)
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${use_middlewares_FILES})
 
-target_precompile_headers(use_middlewares REUSE_FROM fawkes.pch)
+target_precompile_headers(use_middlewares REUSE_FROM fawkes::pch)
