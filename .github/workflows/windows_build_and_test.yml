@@ -24,6 +24,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup cmake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '4.2.x'
+
+      - name: Use cmake
+        run: cmake --version
+
       - name: Setup MSVC dev environment
         uses: TheMrMilchmann/setup-msvc-dev@v4
         with:
