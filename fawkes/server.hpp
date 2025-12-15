@@ -18,6 +18,7 @@
 #include <boost/beast/http/message_generator.hpp>
 #include <boost/beast/http/string_body.hpp>
 
+#include "fawkes/io_thread_pool.hpp"
 #include "fawkes/router.hpp"
 
 namespace fawkes {
@@ -30,6 +31,11 @@ class server {
 public:
     explicit server(asio::io_context& io_ctx)
         : io_ctx_(io_ctx),
+          acceptor_(io_ctx_) {}
+
+    server(asio::io_context& io_ctx, io_thread_pool& io_pool)
+        : io_ctx_(io_ctx),
+          io_pool_(&io_pool),
           acceptor_(io_ctx_) {}
 
     ~server() = default;
@@ -131,6 +137,7 @@ private:
                                      std::exception_ptr eptr);
 
     asio::io_context& io_ctx_;
+    io_thread_pool* io_pool_{nullptr};
     asio::ip::tcp::endpoint endpoint_; // TODO(KC): do we really need to save it?
     asio::ip::tcp::acceptor acceptor_;
     router router_;

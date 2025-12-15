@@ -8,6 +8,8 @@ target_sources(fawkes
     cookie.cpp
     cookie.hpp
     errors.hpp
+    io_thread_pool.cpp
+    io_thread_pool.hpp
     middleware.hpp
     middlewares/cors.cpp
     middlewares/cors.hpp
@@ -78,6 +80,7 @@ target_sources(fawkes_tests
     test_main.cpp
 
     cookie_test.cpp
+    io_thread_pool_test.cpp
     middlewares/cors_test.cpp
     request_test.cpp
     router_test.cpp

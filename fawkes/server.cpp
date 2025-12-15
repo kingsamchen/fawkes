@@ -69,10 +69,15 @@ void server::listen_and_serve(const std::string& addr, std::uint16_t port) {
 }
 
 asio::awaitable<void> server::do_listen() {
-    auto executor = co_await asio::this_coro::executor;
+    auto main_executor = co_await asio::this_coro::executor;
 
     for (;;) {
-        auto [ec, sock] = co_await acceptor_.async_accept(asio::as_tuple);
+        // Pick exeuctor.
+        auto executor = [&main_executor, this] {
+            return io_pool_ ? io_pool_->get_executor() : main_executor;
+        }();
+
+        auto [ec, sock] = co_await acceptor_.async_accept(executor, asio::as_tuple);
         if (ec) {
             if (ec == asio::error::operation_aborted) {
                 SPDLOG_DEBUG("Acceptor is closed");
