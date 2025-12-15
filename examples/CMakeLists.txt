@@ -59,3 +59,33 @@ get_target_property(use_middlewares_FILES use_middlewares SOURCES)
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${use_middlewares_FILES})
 
 target_precompile_headers(use_middlewares REUSE_FROM fawkes::pch)
+
+#
+# Using io_thread_pool
+#
+
+add_executable(use_io_thread_pool)
+
+target_sources(use_io_thread_pool
+  PRIVATE
+    use_io_thread_pool.cpp
+)
+
+target_link_libraries(use_io_thread_pool
+  PRIVATE
+    fawkes::fawkes
+    fmt::fmt
+    gflags::gflags
+    spdlog::spdlog
+)
+
+fawkes_common_compile_configs(use_io_thread_pool)
+
+fawkes_use_sanitizers(use_io_thread_pool)
+
+fawkes_clang_tidy_on_build(use_io_thread_pool)
+
+get_target_property(use_io_thread_pool_FILES use_io_thread_pool SOURCES)
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${use_io_thread_pool_FILES})
+
+target_precompile_headers(use_io_thread_pool REUSE_FROM fawkes::pch)
