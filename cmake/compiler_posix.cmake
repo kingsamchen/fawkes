@@ -13,7 +13,7 @@ if(FAWKES_NOT_SUBPROJECT)
 endif()
 
 function(fawkes_common_compile_configs TARGET)
-  get_target_type(${TARGET} TARGET_TYPE)
+  fawkes_get_target_type(${TARGET} TARGET_TYPE)
 
   if(NOT TARGET_TYPE STREQUAL "INTERFACE_LIBRARY")
     target_compile_definitions(${TARGET}
@@ -37,6 +37,13 @@ function(fawkes_common_compile_configs TARGET)
         -Wsign-conversion
         -Wno-unused-function
         -Wno-error=deprecated
+    )
+  else()
+    target_compile_definitions(${TARGET}
+      INTERFACE
+        $<$<CONFIG:DEBUG>:
+          _DEBUG
+        >
     )
   endif()
 endfunction()

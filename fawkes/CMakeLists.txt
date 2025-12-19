@@ -60,8 +60,7 @@ fawkes_clang_tidy_on_build(fawkes)
 
 fawkes_use_sanitizers(fawkes)
 
-get_target_property(fawkes_FILES fawkes SOURCES)
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${fawkes_FILES})
+fawkes_source_folder(fawkes)
 
 target_precompile_headers(fawkes REUSE_FROM fawkes::pch)
 
@@ -105,8 +104,7 @@ fawkes_clang_tidy_on_build(fawkes_tests)
 
 fawkes_use_sanitizers(fawkes_tests)
 
-get_target_property(fawkes_tests_FILES fawkes_tests SOURCES)
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${fawkes_tests_FILES})
+fawkes_source_folder(fawkes_tests)
 
 target_precompile_headers(fawkes_tests REUSE_FROM fawkes::pch)
 
