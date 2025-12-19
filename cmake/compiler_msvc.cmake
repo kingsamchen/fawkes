@@ -16,7 +16,7 @@ message(STATUS "FAWKES_USE_MSVC_PARALLEL_BUILD = ${FAWKES_USE_MSVC_PARALLEL_BUIL
 message(STATUS "FAWKES_USE_WIN32_LEAN_AND_MEAN = ${FAWKES_USE_WIN32_LEAN_AND_MEAN}")
 
 function(fawkes_common_compile_configs TARGET)
-  get_target_type(${TARGET} TARGET_TYPE)
+  fawkes_get_target_type(${TARGET} TARGET_TYPE)
 
   if(NOT TARGET_TYPE STREQUAL "INTERFACE_LIBRARY")
     target_compile_definitions(${TARGET}

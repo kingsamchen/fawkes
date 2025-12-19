@@ -95,4 +95,4 @@ if(FAWKES_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
 
-setup_compile_db()
+fawkes_setup_compile_db()
