@@ -86,3 +86,32 @@ fawkes_clang_tidy_on_build(use_io_thread_pool)
 fawkes_source_folder(use_io_thread_pool TARGET_FOLDER "examples")
 
 target_precompile_headers(use_io_thread_pool REUSE_FROM fawkes::pch)
+
+#
+# Server with timeout
+#
+
+add_executable(server_with_timeout)
+
+target_sources(server_with_timeout
+  PRIVATE
+    server_with_timeout.cpp
+)
+
+target_link_libraries(server_with_timeout
+  PRIVATE
+    fawkes::fawkes
+    fmt::fmt
+    gflags::gflags
+    spdlog::spdlog
+)
+
+fawkes_common_compile_configs(server_with_timeout)
+
+fawkes_use_sanitizers(server_with_timeout)
+
+fawkes_clang_tidy_on_build(server_with_timeout)
+
+fawkes_source_folder(server_with_timeout TARGET_FOLDER "examples")
+
+target_precompile_headers(server_with_timeout REUSE_FROM fawkes::pch)
