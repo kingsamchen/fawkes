@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <exception>
 #include <string>
@@ -29,6 +31,34 @@ namespace http = boost::beast::http;
 
 class server {
 public:
+    struct options {
+        // The maximum duration allowed for an established connection being idle.
+        // If zero or negative, there is no timeout.
+        std::chrono::milliseconds idle_timeout{0};
+
+        // The maximum duration allowed to read the entire request, including the body.
+        // If zero or negative, there is no timeout.
+        std::chrono::milliseconds read_timeout{0};
+
+        // The maximum duration allowed to read the entire request, handle it, and send back the
+        // response.
+        // Should be larger than `read_timeout`.
+        // If zero or negative, there is no timeout.
+        std::chrono::milliseconds serve_timeout{0};
+
+        // `read_timeout` may be larger than `serve_timeout`, making the serve timeout effectively
+        // a read timeout.
+        [[nodiscard]] constexpr auto effective_read_timeout() const noexcept {
+            using namespace std::chrono_literals;
+
+            const auto [min, max] = std::minmax(read_timeout, serve_timeout);
+            if (max <= 0ms) {
+                return 0ms;
+            }
+            return min > 0ms ? min : max;
+        }
+    };
+
     explicit server(asio::io_context& io_ctx)
         : io_ctx_(io_ctx),
           acceptor_(io_ctx_) {}
@@ -44,6 +74,10 @@ public:
     server(server&&) = delete;
     server& operator=(const server&) = delete;
     server& operator=(server&&) = delete;
+
+    void set_options(const options& opts) {
+        opts_ = opts;
+    }
 
     void listen_and_serve(const std::string& addr, std::uint16_t port);
 
@@ -138,6 +172,7 @@ private:
 
     asio::io_context& io_ctx_;
     io_thread_pool* io_pool_{nullptr};
+    options opts_;
     asio::ip::tcp::endpoint endpoint_; // TODO(KC): do we really need to save it?
     asio::ip::tcp::acceptor acceptor_;
     router router_;

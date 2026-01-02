@@ -83,6 +83,7 @@ target_sources(fawkes_tests
     middlewares/cors_test.cpp
     request_test.cpp
     router_test.cpp
+    server_options_test.cpp
     tree_test.cpp
 )
 

@@ -40,7 +40,7 @@ CheckOptions:
   - key: cppcoreguidelines-avoid-magic-numbers.IgnorePowersOf2IntegerValues
     value: 1
   - key: cppcoreguidelines-avoid-magic-numbers.IgnoredIntegerValues
-    value: 0;1;2;3;4;5;6;7;8;9;10;16;32;42;64;100;127;128;255;256;511;512;1000;1023;1024
+    value: 0;1;2;3;4;5;6;7;8;9;10;15;16;30;32;42;64;100;127;128;255;256;511;512;1000;1023;1024
   - key: cppcoreguidelines-macro-usage.CheckCapsOnly
     value: 1
   - key: cppcoreguidelines-rvalue-reference-param-not-moved.IgnoreNonDeducedTemplateTypes
@@ -58,5 +58,5 @@ CheckOptions:
   - key: readability-magic-numbers.IgnorePowersOf2IntegerValues
     value: 1
   - key: readability-magic-numbers.IgnoredIntegerValues
-    value: 0;1;2;3;4;5;6;7;8;9;10;16;32;42;64;100;127;128;255;256;511;512;1000;1023;1024
+    value: 0;1;2;3;4;5;6;7;8;9;10;15;16;30;32;42;64;100;127;128;255;256;511;512;1000;1023;1024
 ...

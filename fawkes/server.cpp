@@ -4,6 +4,7 @@
 
 #include "fawkes/server.hpp"
 
+#include <chrono>
 #include <exception>
 #include <functional>
 #include <string>
@@ -14,8 +15,10 @@
 #include <boost/asio/detached.hpp>
 #include <boost/asio/error.hpp>
 #include <boost/beast/core.hpp>
+#include <boost/beast/core/error.hpp>
 #include <boost/beast/http/error.hpp>
 #include <boost/beast/http/field.hpp>
+#include <boost/beast/http/parser.hpp>
 #include <boost/beast/http/read.hpp>
 #include <boost/beast/http/status.hpp>
 #include <boost/beast/http/string_body.hpp>
@@ -95,15 +98,37 @@ asio::awaitable<void> server::do_listen() {
 }
 
 asio::awaitable<void> server::serve_session(beast::tcp_stream stream) const {
+    using namespace std::chrono_literals;
+
     beast::flat_buffer buf;
+    const auto read_timeout = opts_.effective_read_timeout();
 
     // TODO(KC): handle http async_read/async_write exception ?
     // can stream still be usable in this case?
     for (;;) {
-        http::request<http::string_body> req;
-        co_await http::async_read(stream, buf, req);
+        http::request_parser<http::string_body> parser;
 
-        auto resp = co_await handle_request(std::move(req));
+        if (opts_.idle_timeout > 0ms) {
+            stream.expires_after(opts_.idle_timeout);
+        }
+
+        constexpr std::size_t initial_buf_size = 512U;
+        const auto bytes_read = co_await stream.async_read_some(buf.prepare(initial_buf_size));
+        buf.commit(bytes_read);
+
+        if (read_timeout > 0ms) {
+            stream.expires_after(read_timeout);
+        }
+
+        [[maybe_unused]] const auto before_read = std::chrono::steady_clock::now();
+        co_await http::async_read(stream, buf, parser);
+
+        if (opts_.serve_timeout > 0ms) {
+            const auto read_elapsed = std::chrono::steady_clock::now() - before_read;
+            stream.expires_after(opts_.serve_timeout - read_elapsed);
+        }
+
+        auto resp = co_await handle_request(parser.release());
         const bool keep_alive = resp.keep_alive();
 
         co_await beast::async_write(stream, std::move(resp));
@@ -169,8 +194,11 @@ void server::handle_session_error(const asio::ip::tcp::endpoint& remote, std::ex
         try {
             std::rethrow_exception(eptr);
         } catch (const boost::system::system_error& ex) {
-            if (ex.code() == http::error::end_of_stream) {
+            if (ex.code() == http::error::end_of_stream ||
+                ex.code() == asio::error::eof) {
                 SPDLOG_DEBUG("Remote session closed; remote={}", fmt::streamed(remote));
+            } else if (ex.code() == beast::error::timeout) {
+                SPDLOG_ERROR("Remote session timed out; remote={}", fmt::streamed(remote));
             } else {
                 SPDLOG_ERROR("Unhandled system error for session; remote={} what={}",
                              fmt::streamed(remote), ex.what());
