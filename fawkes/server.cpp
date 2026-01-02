@@ -16,6 +16,7 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/http/error.hpp>
 #include <boost/beast/http/field.hpp>
+#include <boost/beast/http/parser.hpp>
 #include <boost/beast/http/read.hpp>
 #include <boost/beast/http/status.hpp>
 #include <boost/beast/http/string_body.hpp>
@@ -100,10 +101,21 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream) const {
     // TODO(KC): handle http async_read/async_write exception ?
     // can stream still be usable in this case?
     for (;;) {
-        http::request<http::string_body> req;
-        co_await http::async_read(stream, buf, req);
+        http::request_parser<http::string_body> parser;
 
-        auto resp = co_await handle_request(std::move(req));
+        // TODO(KC): set up idle-timeout
+
+        constexpr std::size_t initial_buf_size = 512U;
+        const auto bytes_read = co_await stream.async_read_some(buf.prepare(initial_buf_size));
+        buf.commit(bytes_read);
+
+        // TODO(KC): set up read-timeout
+
+        co_await http::async_read(stream, buf, parser);
+
+        // TODO(KC): set up remaining serve-timeout, i.e. serve_timeout - time_spent_on_read
+
+        auto resp = co_await handle_request(parser.release());
         const bool keep_alive = resp.keep_alive();
 
         co_await beast::async_write(stream, std::move(resp));
