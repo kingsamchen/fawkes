@@ -12,6 +12,7 @@
 #include <boost/beast/http/status.hpp>
 #include <esl/ignore_unused.h>
 #include <gflags/gflags.h>
+#include <spdlog/cfg/env.h>
 #include <spdlog/spdlog.h>
 
 #include "fawkes/request.hpp"
@@ -24,9 +25,10 @@ namespace http = boost::beast::http;
 DEFINE_uint32(port, 7890, "Port number to listen on");
 
 int main(int argc, char* argv[]) {
-    try {
-        gflags::ParseCommandLineFlags(&argc, &argv, true);
+    gflags::ParseCommandLineFlags(&argc, &argv, true);
+    spdlog::cfg::load_env_levels();
 
+    try {
         asio::io_context io_ctx{1};
         fawkes::server svc(io_ctx);
         svc.do_get("/ping",

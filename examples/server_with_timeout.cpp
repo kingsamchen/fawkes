@@ -11,6 +11,7 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/beast/http/status.hpp>
 #include <gflags/gflags.h>
+#include <spdlog/cfg/env.h>
 #include <spdlog/spdlog.h>
 
 #include "fawkes/middleware.hpp"
@@ -37,6 +38,7 @@ struct log_access {
 
 int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
+    spdlog::cfg::load_env_levels();
 
     try {
         asio::io_context io_ctx{1};

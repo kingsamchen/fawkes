@@ -17,6 +17,7 @@
 #include <fmt/chrono.h>
 #include <fmt/format.h>
 #include <gflags/gflags.h>
+#include <spdlog/cfg/env.h>
 #include <spdlog/spdlog.h>
 
 #include "fawkes/middleware.hpp"
@@ -61,9 +62,10 @@ struct tracking_id {
 };
 
 int main(int argc, char* argv[]) {
-    try {
-        gflags::ParseCommandLineFlags(&argc, &argv, true);
+    gflags::ParseCommandLineFlags(&argc, &argv, true);
+    spdlog::cfg::load_env_levels();
 
+    try {
         asio::io_context io_ctx{1};
 
         fawkes::server svc(io_ctx);
