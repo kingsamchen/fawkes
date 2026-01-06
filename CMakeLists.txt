@@ -83,6 +83,11 @@ target_compile_options(Boost::json
     $<$<CXX_COMPILER_ID:GNU>:-Wno-stringop-overflow>
 )
 
+target_compile_definitions(spdlog::spdlog
+  INTERFACE
+    SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG
+)
+
 include(${FAWKES_CMAKE_DIR}/pch.cmake)
 
 if(BUILD_TESTING)
