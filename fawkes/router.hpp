@@ -40,7 +40,8 @@ template<typename T>
 constexpr bool is_asio_awaitable_v = is_asio_awaitable<T>::value;
 
 template<typename F>
-concept is_user_handler = std::invocable<F, const request&, response&> &&
+concept is_user_handler = std::movable<std::decay_t<F>> &&
+                          std::invocable<F, const request&, response&> &&
                           is_asio_awaitable_v<std::invoke_result_t<F, const request&, response&>>;
 
 class router {
@@ -57,9 +58,18 @@ public:
                    std::string_view path,
                    std::tuple<Mws...>&& middlewares,
                    H&& handler) {
+        auto hd = []<typename T>(T&& value) -> std::decay_t<T> { // NOLINT(*-missing-std-forward)
+            if constexpr (std::is_lvalue_reference_v<T>) {
+                return value;
+            } else {
+                return static_cast<T&&>(value);
+            }
+        }((std::forward<H>(handler)));
+
+        // The lambda coroutine is stored and kept alive in routes.
         route_handler_t route_handler =
-            [mws = std::move(middlewares),
-             user_handler = std::forward<H>(handler)](request& req, response& resp) mutable
+            [mws = std::move(middlewares), // NOLINT(*-avoid-capturing-lambda-coroutines)
+             user_handler = std::move(hd)](request& req, response& resp) mutable
             -> asio::awaitable<middleware_result> {
             using enum middleware_result;
 

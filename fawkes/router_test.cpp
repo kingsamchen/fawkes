@@ -40,7 +40,7 @@ TEST_CASE("Concept is_user_handler") {
     }
 }
 
-TEST_SUITE_END();
+TEST_SUITE_END(); // Routes
 
 TEST_SUITE_BEGIN("Middleware");
 
@@ -300,6 +300,6 @@ TEST_CASE("Skip no middleware") {
              fawkes::middleware_result::proceed);
 }
 
-TEST_SUITE_END();
+TEST_SUITE_END(); // Middleware
 
 } // namespace

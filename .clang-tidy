@@ -12,7 +12,6 @@ Checks: >
   readability-*,
   -bugprone-easily-swappable-parameters,
   -cppcoreguidelines-avoid-c-arrays,
-  -cppcoreguidelines-avoid-capturing-lambda-coroutines,
   -cppcoreguidelines-avoid-do-while,
   -cppcoreguidelines-avoid-magic-numbers,
   -cppcoreguidelines-avoid-reference-coroutine-parameters,
