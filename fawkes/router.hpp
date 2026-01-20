@@ -77,7 +77,7 @@ public:
             // router-level middlewares.
             // However, throwing from any middleware would be like aborting from the middleware.
 
-            if (detail::run_middlewares_pre_handle(mws, req, resp) == abort) {
+            if (co_await detail::run_middlewares_pre_handle(mws, req, resp) == abort) {
                 co_return abort;
             }
 
@@ -95,7 +95,7 @@ public:
                 resp.json(http::status::internal_server_error, json::serialize(body));
             }
 
-            co_return detail::run_middlewares_post_handle(mws, req, resp);
+            co_return co_await detail::run_middlewares_post_handle(mws, req, resp);
         };
         routes_[verb].add_route(path, std::move(route_handler));
     }
@@ -117,12 +117,14 @@ public:
         base_middlewares_.set(std::make_tuple(std::move(mws)...));
     }
 
-    [[nodiscard]] middleware_result run_pre_handle(request& req, response& resp) const {
-        return base_middlewares_.pre_handle(req, resp);
+    [[nodiscard]] asio::awaitable<middleware_result> run_pre_handle(request& req,
+                                                                    response& resp) const {
+        co_return co_await base_middlewares_.pre_handle(req, resp);
     }
 
-    [[nodiscard]] middleware_result run_post_handle(request& req, response& resp) const {
-        return base_middlewares_.post_handle(req, resp);
+    [[nodiscard]] asio::awaitable<middleware_result> run_post_handle(request& req,
+                                                                     response& resp) const {
+        co_return co_await base_middlewares_.post_handle(req, resp);
     }
 
 private:
