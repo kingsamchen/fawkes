@@ -10,6 +10,7 @@
 
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/io_context.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/beast/http/status.hpp>
 #include <boost/beast/http/verb.hpp>
 #include <boost/url.hpp>
@@ -61,6 +62,16 @@ struct tracking_id {
     }
 };
 
+struct coro_delayed {
+    static asio::awaitable<fawkes::middleware_result> pre_handle(fawkes::request& /*req*/,
+                                                                 fawkes::response& /*resp*/) {
+        asio::steady_timer timer(co_await asio::this_coro::executor);
+        timer.expires_after(std::chrono::seconds(1));
+        co_await timer.async_wait();
+        co_return fawkes::middleware_result::proceed;
+    }
+};
+
 int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     spdlog::cfg::load_env_levels();
@@ -95,10 +106,11 @@ int main(int argc, char* argv[]) {
                    });
 
         svc.do_get("/healthcheck",
+                   fawkes::middlewares::use(coro_delayed{}),
                    [](const fawkes::request& req, fawkes::response& resp)
                        -> asio::awaitable<void> {
                        esl::ignore_unused(req);
-                       resp.text(http::status::ok, std::string{"Pong"});
+                       resp.text(http::status::ok, std::string{"Pong after 1s delay"});
                        co_return;
                    });
 

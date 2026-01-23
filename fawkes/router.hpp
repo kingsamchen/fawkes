@@ -19,6 +19,7 @@
 #include <boost/unordered/unordered_flat_map.hpp>
 
 #include "fawkes/errors.hpp"
+#include "fawkes/is_asio_awaitable.hpp"
 #include "fawkes/middleware.hpp"
 #include "fawkes/path_params.hpp"
 #include "fawkes/tree.hpp"
@@ -30,19 +31,12 @@ namespace beast = boost::beast;
 namespace http = boost::beast::http;
 namespace json = boost::json;
 
-template<typename T>
-struct is_asio_awaitable : std::false_type {};
-
-template<typename Executor>
-struct is_asio_awaitable<asio::awaitable<void, Executor>> : std::true_type {};
-
-template<typename T>
-constexpr bool is_asio_awaitable_v = is_asio_awaitable<T>::value;
-
 template<typename F>
 concept is_user_handler = std::movable<std::decay_t<F>> &&
                           std::invocable<F, const request&, response&> &&
-                          is_asio_awaitable_v<std::invoke_result_t<F, const request&, response&>>;
+                          is_asio_awaitable_of_v<
+                              std::invoke_result_t<F, const request&, response&>,
+                              void>;
 
 class router {
 public:
@@ -77,7 +71,7 @@ public:
             // router-level middlewares.
             // However, throwing from any middleware would be like aborting from the middleware.
 
-            if (detail::run_middlewares_pre_handle(mws, req, resp) == abort) {
+            if (co_await detail::run_middlewares_pre_handle(mws, req, resp) == abort) {
                 co_return abort;
             }
 
@@ -95,7 +89,7 @@ public:
                 resp.json(http::status::internal_server_error, json::serialize(body));
             }
 
-            co_return detail::run_middlewares_post_handle(mws, req, resp);
+            co_return co_await detail::run_middlewares_post_handle(mws, req, resp);
         };
         routes_[verb].add_route(path, std::move(route_handler));
     }
@@ -117,11 +111,13 @@ public:
         base_middlewares_.set(std::make_tuple(std::move(mws)...));
     }
 
-    [[nodiscard]] middleware_result run_pre_handle(request& req, response& resp) const {
+    [[nodiscard]] asio::awaitable<middleware_result> run_pre_handle(request& req,
+                                                                    response& resp) const {
         return base_middlewares_.pre_handle(req, resp);
     }
 
-    [[nodiscard]] middleware_result run_post_handle(request& req, response& resp) const {
+    [[nodiscard]] asio::awaitable<middleware_result> run_post_handle(request& req,
+                                                                     response& resp) const {
         return base_middlewares_.post_handle(req, resp);
     }
 
