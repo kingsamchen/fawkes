@@ -156,7 +156,7 @@ asio::awaitable<http::message_generator> server::handle_request(
                                                    std::as_const(fwk_req).path(),
                                                    fwk_req.params());
 
-        if (router_.run_pre_handle(fwk_req, fwk_resp) == middleware_result::abort) {
+        if (co_await router_.run_pre_handle(fwk_req, fwk_resp) == middleware_result::abort) {
             co_return prepare_response(fwk_resp);
         }
 
@@ -166,7 +166,7 @@ asio::awaitable<http::message_generator> server::handle_request(
             const json::object body{
                 {"error", json::object{{"message", "Unknown resource"}}}};
             fwk_resp.json(http::status::not_found, json::serialize(body));
-            esl::ignore_unused(router_.run_post_handle(fwk_req, fwk_resp));
+            esl::ignore_unused(co_await router_.run_post_handle(fwk_req, fwk_resp));
             co_return prepare_response(fwk_resp);
         }
 
@@ -177,7 +177,7 @@ asio::awaitable<http::message_generator> server::handle_request(
             co_return prepare_response(fwk_resp);
         }
 
-        esl::ignore_unused(router_.run_post_handle(fwk_req, fwk_resp));
+        esl::ignore_unused(co_await router_.run_post_handle(fwk_req, fwk_resp));
 
         co_return prepare_response(fwk_resp);
     } catch (const std::exception& ex) {
