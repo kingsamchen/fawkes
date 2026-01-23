@@ -2,7 +2,6 @@
 // This file is subject to the terms of license that can be found
 // in the LICENSE file.
 
-#include <latch>
 #include <semaphore>
 #include <set>
 #include <thread>

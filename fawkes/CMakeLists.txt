@@ -10,6 +10,7 @@ target_sources(fawkes
     errors.hpp
     io_thread_pool.cpp
     io_thread_pool.hpp
+    is_asio_awaitable.hpp
     middleware.hpp
     middlewares/cors.cpp
     middlewares/cors.hpp
