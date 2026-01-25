@@ -19,6 +19,7 @@
 #include <boost/unordered/unordered_flat_map.hpp>
 
 #include "fawkes/errors.hpp"
+#include "fawkes/is_asio_awaitable.hpp"
 #include "fawkes/middleware.hpp"
 #include "fawkes/path_params.hpp"
 #include "fawkes/tree.hpp"
@@ -30,19 +31,11 @@ namespace beast = boost::beast;
 namespace http = boost::beast::http;
 namespace json = boost::json;
 
-template<typename T>
-struct is_asio_awaitable : std::false_type {};
-
-template<typename Executor>
-struct is_asio_awaitable<asio::awaitable<void, Executor>> : std::true_type {};
-
-template<typename T>
-constexpr bool is_asio_awaitable_v = is_asio_awaitable<T>::value;
-
 template<typename F>
 concept is_user_handler = std::movable<std::decay_t<F>> &&
                           std::invocable<F, const request&, response&> &&
-                          is_asio_awaitable_v<std::invoke_result_t<F, const request&, response&>>;
+                          is_asio_awaitable_of_v<std::invoke_result_t<F, const request&, response&>,
+                                                 void>;
 
 class router {
 public:
