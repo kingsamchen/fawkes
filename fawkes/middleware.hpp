@@ -14,6 +14,8 @@
 
 #include <esl/ignore_unused.h>
 
+#include "fawkes/is_asio_awaitable.hpp"
+
 namespace fawkes {
 
 // TODO(KC): Consider make middlewares immutable.
@@ -28,13 +30,17 @@ enum class middleware_result : std::uint8_t {
 };
 
 template<typename T>
+concept middleware_handler_return_type = std::same_as<T, middleware_result> ||
+                                         is_asio_awaitable_of_v<T, middleware_result>;
+
+template<typename T>
 concept has_pre_handle = requires(T&& t, request& req, response& resp) {
-    { std::forward<T>(t).pre_handle(req, resp) } -> std::same_as<middleware_result>;
+    { std::forward<T>(t).pre_handle(req, resp) } -> middleware_handler_return_type;
 };
 
 template<typename T>
 concept has_post_handle = requires(T&& t, request& req, response& resp) {
-    { std::forward<T>(t).post_handle(req, resp) } -> std::same_as<middleware_result>;
+    { std::forward<T>(t).post_handle(req, resp) } -> middleware_handler_return_type;
 };
 
 template<typename T>

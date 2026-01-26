@@ -22,7 +22,12 @@ template<typename T>
 constexpr bool is_asio_awaitable_v = is_asio_awaitable<T>::value;
 
 template<typename T, typename E>
-constexpr bool is_asio_awaitable_of_v = is_asio_awaitable_v<T> &&
-                                        std::is_same_v<typename T::value_type, E>;
+struct is_asio_awaitable_of : std::false_type {};
+
+template<typename T, typename Executor>
+struct is_asio_awaitable_of<asio::awaitable<T, Executor>, T> : std::true_type {};
+
+template<typename T, typename E>
+constexpr bool is_asio_awaitable_of_v = is_asio_awaitable_of<T, E>::value;
 
 } // namespace fawkes

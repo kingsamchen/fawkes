@@ -34,8 +34,9 @@ namespace json = boost::json;
 template<typename F>
 concept is_user_handler = std::movable<std::decay_t<F>> &&
                           std::invocable<F, const request&, response&> &&
-                          is_asio_awaitable_of_v<std::invoke_result_t<F, const request&, response&>,
-                                                 void>;
+                          is_asio_awaitable_of_v<
+                              std::invoke_result_t<F, const request&, response&>,
+                              void>;
 
 class router {
 public:

@@ -52,6 +52,11 @@ TEST_CASE("Check if asio::awaitable of specified type") {
         static_assert(!fawkes::is_asio_awaitable_of_v<asio::awaitable<void>, int>);
         static_assert(!fawkes::is_asio_awaitable_of_v<asio::awaitable<foo, my_executor>, bar>);
     }
+
+    SUBCASE("not even asio::awataible") {
+        static_assert(!fawkes::is_asio_awaitable_of_v<void, int>);
+        static_assert(!fawkes::is_asio_awaitable_of_v<foo, foo>);
+    }
 }
 
 TEST_SUITE_END(); // Type Traits/is_asio_awaitable
