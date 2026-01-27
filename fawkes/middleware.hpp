@@ -29,18 +29,26 @@ enum class middleware_result : std::uint8_t {
     proceed,
 };
 
+// template<typename T>
+// concept middleware_return_type = std::same_as<T, middleware_result> ||
+//                                  is_asio_awaitable_of_v<T, middleware_result>;
+
 template<typename T>
-concept middleware_handler_return_type = std::same_as<T, middleware_result> ||
-                                         is_asio_awaitable_of_v<T, middleware_result>;
+concept is_coro_return_type = is_asio_awaitable_of_v<T, middleware_result>;
 
 template<typename T>
 concept has_pre_handle = requires(T&& t, request& req, response& resp) {
-    { std::forward<T>(t).pre_handle(req, resp) } -> middleware_handler_return_type;
+    { std::forward<T>(t).pre_handle(req, resp) } -> std::same_as<middleware_result>;
+};
+
+template<typename T>
+concept has_coro_pre_handle = requires(T&& t, request& req, response& resp) {
+    { std::forward<T>(t).pre_handle(req, resp) } -> is_coro_return_type;
 };
 
 template<typename T>
 concept has_post_handle = requires(T&& t, request& req, response& resp) {
-    { std::forward<T>(t).post_handle(req, resp) } -> middleware_handler_return_type;
+    { std::forward<T>(t).post_handle(req, resp) } -> std::same_as<middleware_result>;
 };
 
 template<typename T>
@@ -49,78 +57,85 @@ concept is_middleware = has_pre_handle<T> || has_post_handle<T>;
 namespace detail {
 
 template<bool IsForward, std::size_t... I, is_middleware... Mws, typename F>
-middleware_result apply_middlewares_impl(std::tuple<Mws...>& middlewares,
-                                         std::index_sequence<I...> idx_seq,
-                                         request& req,
-                                         response& resp,
-                                         F&& fn) {
+asio::awaitable<middleware_result> apply_middlewares_impl(std::tuple<Mws...>& middlewares,
+                                                          std::index_sequence<I...> idx_seq,
+                                                          request& req,
+                                                          response& resp,
+                                                          F&& fn) {
     constexpr auto N = idx_seq.size();
     auto result = middleware_result::proceed;
     // Short circuit if possible.
     auto&& f = std::forward<F>(fn);
     if constexpr (IsForward) {
-        esl::ignore_unused((f(std::get<I>(middlewares), req, resp, result) && ...));
+        esl::ignore_unused(
+            ((co_await f(std::get<I>(middlewares), req, resp, result)) && ...));
     } else {
-        esl::ignore_unused((f(std::get<N - I - 1>(middlewares), req, resp, result) && ...));
+        esl::ignore_unused(
+            ((co_await f(std::get<N - I - 1>(middlewares), req, resp, result)) && ...));
     }
-    return result;
+    co_return result;
 }
 
 template<bool IsForward, is_middleware... Mws, typename F>
-middleware_result apply_middlewares(std::tuple<Mws...>& middlewares,
-                                    request& req,
-                                    response& resp,
-                                    F&& fn) {
+asio::awaitable<middleware_result> apply_middlewares(std::tuple<Mws...>& middlewares,
+                                                     request& req,
+                                                     response& resp,
+                                                     F&& fn) {
     using idx_seq_t = std::make_index_sequence<std::tuple_size_v<std::tuple<Mws...>>>;
     return apply_middlewares_impl<IsForward>(
         middlewares, idx_seq_t{}, req, resp, std::forward<F>(fn));
 }
 
 template<is_middleware... Mws>
-middleware_result run_middlewares_pre_handle(std::tuple<Mws...>& middlewares,
-                                             request& req,
-                                             response& resp) {
+asio::awaitable<middleware_result> run_middlewares_pre_handle(std::tuple<Mws...>& middlewares,
+                                                              request& req,
+                                                              response& resp) {
     if constexpr (sizeof...(Mws) == 0) {
-        return middleware_result::proceed;
+        co_return middleware_result::proceed;
     } else {
-        return apply_middlewares<true>(
+        co_return apply_middlewares<true>(
             middlewares,
             req,
             resp,
             []<is_middleware M>(M& middleware,
                                 request& mw_req,
                                 response& mw_resp,
-                                middleware_result& ret) -> bool {
+                                middleware_result& ret) -> asio::awaitable<bool> {
                 if constexpr (has_pre_handle<M>) {
-                    ret = middleware.pre_handle(mw_req, mw_resp);
-                    return ret == middleware_result::proceed;
+                    using result_type = std::invoke_result_t<M&, request&, response&>;
+                    if constexpr (is_asio_awaitable_v<result_type>) {
+                        ret = co_await middleware.pre_handle(mw_req, mw_resp);
+                    } else {
+                        ret = middleware.pre_handle(mw_req, mw_resp);
+                        co_return ret == middleware_result::proceed;
+                    }
                 } else {
-                    return true;
+                    co_return true;
                 }
             });
     }
 }
 
 template<is_middleware... Mws>
-middleware_result run_middlewares_post_handle(std::tuple<Mws...>& middlewares,
-                                              request& req,
-                                              response& resp) {
+asio::awaitable<middleware_result> run_middlewares_post_handle(std::tuple<Mws...>& middlewares,
+                                                               request& req,
+                                                               response& resp) {
     if constexpr (sizeof...(Mws) == 0) {
-        return middleware_result::proceed;
+        co_return middleware_result::proceed;
     } else {
-        return detail::apply_middlewares<false>(
+        co_return apply_middlewares<false>(
             middlewares,
             req,
             resp,
             []<is_middleware M>(M& middleware,
                                 request& mw_req,
                                 response& mw_resp,
-                                middleware_result& ret) -> bool {
+                                middleware_result& ret) -> asio::awaitable<bool> {
                 if constexpr (has_post_handle<M>) {
                     ret = middleware.post_handle(mw_req, mw_resp);
                     return ret == middleware_result::proceed;
                 } else {
-                    return true;
+                    co_return true;
                 }
             });
     }
