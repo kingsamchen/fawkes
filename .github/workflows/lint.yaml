@@ -21,7 +21,7 @@ jobs:
       - name: Add repository for clang-format and clang-tidy
         run: |
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          sudo add-apt-repository -y deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-20 main
+          sudo add-apt-repository -y deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-21 main
 
       - name: Add Ubuntu mirrors
         run: |
@@ -34,7 +34,7 @@ jobs:
       - name: Install required tools
         run: |
           sudo apt update
-          sudo apt install -y clang-20 clang-format-20 clang-tidy-20 ninja-build
+          sudo apt install -y clang-21 clang-format-21 clang-tidy-21 ninja-build
           sudo pip3 install cpplint
 
       - name: Run cpplint
@@ -44,13 +44,13 @@ jobs:
       - name: Run clang-format
         run: |
           find fawkes examples -name '*.hpp' -o -name '*.cpp' |\
-            xargs clang-format-20 --dry-run -Werror
+            xargs clang-format-21 --dry-run -Werror
 
       - name: Run clang-tidy
         env:
-          CC: clang-20
-          CXX: clang++-20
+          CC: clang-21
+          CXX: clang++-21
         run: |
           cmake --preset linux-ci -DFAWKES_USE_SANITIZERS="" -DFAWKES_BUILD_EXAMPLES=ON \
             -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON -DCMAKE_CXX_SCAN_FOR_MODULES=OFF
-          run-clang-tidy-20 -p out/linux-ci -source-filter '.*\/fawkes\/(fawkes|examples)\/.*'
+          run-clang-tidy-21 -p out/linux-ci -source-filter '.*\/fawkes\/(fawkes|examples)\/.*'
