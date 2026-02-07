@@ -16,12 +16,15 @@
 #include <boost/asio/error.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/core/error.hpp>
+#include <boost/beast/core/string.hpp>
+#include <boost/beast/http/empty_body.hpp>
 #include <boost/beast/http/error.hpp>
 #include <boost/beast/http/field.hpp>
 #include <boost/beast/http/parser.hpp>
 #include <boost/beast/http/read.hpp>
 #include <boost/beast/http/status.hpp>
 #include <boost/beast/http/string_body.hpp>
+#include <boost/beast/http/write.hpp>
 #include <boost/beast/version.hpp>
 #include <boost/json/object.hpp>
 #include <boost/json/serialize.hpp>
@@ -121,7 +124,18 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream) const {
         }
 
         [[maybe_unused]] const auto before_read = std::chrono::steady_clock::now();
-        co_await http::async_read(stream, buf, parser);
+        co_await http::async_read_header(stream, buf, parser);
+
+        if (beast::iequals(parser.get()[http::field::expect], "100-continue")) {
+            http::response<http::empty_body> continue_resp{http::status::continue_,
+                                                           parser.get().version()};
+            continue_resp.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+            co_await http::async_write(stream, continue_resp);
+        }
+
+        if (!parser.is_done()) {
+            co_await http::async_read(stream, buf, parser);
+        }
 
         if (opts_.serve_timeout > 0ms) {
             const auto read_elapsed = std::chrono::steady_clock::now() - before_read;

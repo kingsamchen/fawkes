@@ -55,6 +55,13 @@ int main(int argc, char* argv[]) {
 
                        co_return;
                    });
+        svc.do_post("/echo",
+                    [](const fawkes::request& req, fawkes::response& resp)
+                        -> asio::awaitable<void> {
+                        SPDLOG_INFO("Request Content-Type: {}", req.header()["Content-Type"]);
+                        resp.text(http::status::ok, req.body());
+                        co_return;
+                    });
         svc.listen_and_serve("0.0.0.0", static_cast<std::uint16_t>(FLAGS_port));
         SPDLOG_INFO("ping-pong server is listenning at {}", FLAGS_port);
         io_ctx.run();
