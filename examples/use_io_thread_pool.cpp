@@ -3,6 +3,7 @@
 // in the LICENSE file.
 
 #include <exception>
+#include <string>
 
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/io_context.hpp>
@@ -36,6 +37,12 @@ int main(int argc, char* argv[]) {
                       [](const fawkes::request&, fawkes::response& resp) -> asio::awaitable<void> {
                           resp.text(http::status::ok, fmt::format("running on thread={}",
                                                                   std::this_thread::get_id()));
+                          co_return;
+                      });
+
+        server.do_get("/status",
+                      [](const fawkes::request&, fawkes::response& resp) -> asio::awaitable<void> {
+                          resp.text(http::status::ok, std::string{"hello world"});
                           co_return;
                       });
 
