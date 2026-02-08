@@ -209,13 +209,15 @@ void server::handle_session_error(const asio::ip::tcp::endpoint& remote, std::ex
             std::rethrow_exception(eptr);
         } catch (const boost::system::system_error& ex) {
             if (ex.code() == http::error::end_of_stream ||
-                ex.code() == asio::error::eof) {
-                SPDLOG_DEBUG("Remote session closed; remote={}", fmt::streamed(remote));
+                ex.code() == asio::error::eof ||
+                ex.code() == asio::error::connection_reset) {
+                SPDLOG_DEBUG("Remote session closed; remote={} cause={}",
+                             fmt::streamed(remote), ex.what());
             } else if (ex.code() == beast::error::timeout) {
                 SPDLOG_ERROR("Remote session timed out; remote={}", fmt::streamed(remote));
             } else {
-                SPDLOG_ERROR("Unhandled system error for session; remote={} what={}",
-                             fmt::streamed(remote), ex.what());
+                SPDLOG_ERROR("Unhandled error for session; remote={} code={} what={}",
+                             fmt::streamed(remote), ex.code().value(), ex.what());
             }
         } catch (const std::exception& ex) {
             SPDLOG_ERROR("Unhandled error for session; remote={} what={}",
