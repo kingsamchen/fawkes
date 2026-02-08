@@ -3,6 +3,7 @@
 // in the LICENSE file.
 
 #include <exception>
+#include <random>
 #include <string>
 
 #include <boost/asio/awaitable.hpp>
@@ -24,6 +25,16 @@ namespace http = boost::beast::http;
 
 DEFINE_uint32(port, 7890, "Port number to listen on");
 
+namespace {
+
+int tls_rnd() {
+    thread_local std::mt19937 eng{std::random_device{}()};
+    thread_local std::uniform_int_distribution<int> dist{10, 50}; // NOLINT(*-magic-numbers)
+    return dist(eng);
+}
+
+} // namespace
+
 int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     spdlog::cfg::load_env_levels();
@@ -42,6 +53,15 @@ int main(int argc, char* argv[]) {
 
         server.do_get("/status",
                       [](const fawkes::request&, fawkes::response& resp) -> asio::awaitable<void> {
+                          resp.text(http::status::ok, std::string{"hello world"});
+                          co_return;
+                      });
+
+        server.do_get("/delayed",
+                      [](const fawkes::request&, fawkes::response& resp) -> asio::awaitable<void> {
+                          asio::steady_timer timer(co_await asio::this_coro::executor);
+                          timer.expires_after(std::chrono::milliseconds(tls_rnd()));
+                          co_await timer.async_wait();
                           resp.text(http::status::ok, std::string{"hello world"});
                           co_return;
                       });
