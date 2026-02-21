@@ -40,7 +40,18 @@ public:
         return pool_[idx].io_ctx_ptr->get_executor();
     }
 
-    // Pending tasks may not be handled.
+    // Blocks until the threads in the pool have completed all outstanding works.
+    // After `join()` is called, it is unspecified whether new works submitted to the pool
+    // would be executed.
+    void join() {
+        for (auto& ctx : pool_) {
+            ctx.guard.reset();
+            ctx.thd.join();
+        }
+    }
+
+    // Stops the pool as soon as possible.
+    // Pending tasks would not be handled.
     void stop() {
         for (auto& ctx : pool_) {
             ctx.io_ctx_ptr->stop();

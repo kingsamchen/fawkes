@@ -7,11 +7,16 @@
 #include <chrono>
 #include <exception>
 #include <functional>
+#include <source_location>
 #include <string>
 #include <utility>
 
 #include <boost/asio/as_tuple.hpp>
+#include <boost/asio/bind_cancellation_slot.hpp>
+#include <boost/asio/cancellation_signal.hpp>
+#include <boost/asio/cancellation_state.hpp>
 #include <boost/asio/co_spawn.hpp>
+#include <boost/asio/deferred.hpp>
 #include <boost/asio/detached.hpp>
 #include <boost/asio/error.hpp>
 #include <boost/beast/core.hpp>
@@ -43,6 +48,23 @@ namespace fawkes {
 namespace json = boost::json;
 
 namespace {
+
+constexpr std::string_view expect_value = "100-continue";
+
+template<typename F>
+auto make_no_fail(F&& fn, std::source_location loc = std::source_location::current()) {
+    return [f = std::forward<F>(fn), loc]() noexcept {
+        try {
+            f();
+        } catch (const std::exception& ex) {
+            SPDLOG_ERROR("Unhandled error for no-fail; original={}:{} what={}",
+                         loc.file_name(), loc.line(), ex.what());
+        } catch (...) {
+            SPDLOG_ERROR("Unhandled error for no-fail; original={}:{}",
+                         loc.file_name(), loc.line());
+        }
+    };
+}
 
 http::response<http::string_body> make_unexpected_error_response(unsigned int http_version,
                                                                  bool keep_alive,
@@ -78,14 +100,14 @@ asio::awaitable<void> server::do_listen() {
     auto main_executor = co_await asio::this_coro::executor;
 
     for (;;) {
-        // Pick exeuctor.
-        auto executor = [&main_executor, this] {
+        // Pick executor.
+        auto executor = [main_executor, this] {
             return io_pool_ ? io_pool_->get_executor() : main_executor;
         }();
 
         auto [ec, sock] = co_await acceptor_.async_accept(executor, asio::as_tuple);
         if (ec) {
-            if (ec == asio::error::operation_aborted) {
+            if (ec == asio::error::operation_aborted || !acceptor_.is_open()) {
                 SPDLOG_DEBUG("Acceptor is closed");
                 co_return;
             }
@@ -95,13 +117,24 @@ asio::awaitable<void> server::do_listen() {
 
         auto remote_endpoint = sock.remote_endpoint();
         beast::tcp_stream stream(std::move(sock));
-        asio::co_spawn(executor, serve_session(std::move(stream)),
+        asio::co_spawn(executor, serve_session(std::move(stream), stop_source_.get_token()),
                        std::bind_front(handle_session_error, std::move(remote_endpoint)));
     }
 }
 
-asio::awaitable<void> server::serve_session(beast::tcp_stream stream) const {
+asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
+                                            std::stop_token stop_token) const {
     using namespace std::chrono_literals;
+
+    auto executor = co_await asio::this_coro::executor;
+
+    asio::cancellation_signal stop_signal;
+    const std::stop_callback stop_callback(stop_token,
+                                           make_no_fail([&stop_signal, executor]() {
+                                               asio::dispatch(executor, [&stop_signal]() {
+                                                   stop_signal.emit(asio::cancellation_type::all);
+                                               });
+                                           }));
 
     beast::flat_buffer buf;
     const auto read_timeout = opts_.effective_read_timeout();
@@ -116,7 +149,9 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream) const {
         }
 
         constexpr std::size_t initial_buf_size = 512U;
-        const auto bytes_read = co_await stream.async_read_some(buf.prepare(initial_buf_size));
+        const auto bytes_read = co_await stream.async_read_some(
+            buf.prepare(initial_buf_size),
+            asio::bind_cancellation_slot(stop_signal.slot(), asio::deferred));
         buf.commit(bytes_read);
 
         if (read_timeout > 0ms) {
@@ -126,7 +161,7 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream) const {
         [[maybe_unused]] const auto before_read = std::chrono::steady_clock::now();
         co_await http::async_read_header(stream, buf, parser);
 
-        if (beast::iequals(parser.get()[http::field::expect], "100-continue")) {
+        if (beast::iequals(parser.get()[http::field::expect], expect_value)) {
             http::response<http::empty_body> continue_resp{http::status::continue_,
                                                            parser.get().version()};
             continue_resp.set(http::field::server, BOOST_BEAST_VERSION_STRING);
@@ -147,12 +182,12 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream) const {
 
         co_await beast::async_write(stream, std::move(resp));
 
-        if (!keep_alive) {
+        if (!keep_alive || stop_token.stop_requested()) {
             break;
         }
     }
 
-    stream.socket().shutdown(asio::ip::tcp::socket::shutdown_send);
+    stream.socket().shutdown(asio::ip::tcp::socket::shutdown_both);
 }
 
 asio::awaitable<http::message_generator> server::handle_request(
@@ -212,12 +247,14 @@ void server::handle_session_error(const asio::ip::tcp::endpoint& remote, std::ex
                 ex.code() == asio::error::eof ||
                 ex.code() == asio::error::connection_reset) {
                 SPDLOG_DEBUG("Remote session closed; remote={} cause={}",
-                             fmt::streamed(remote), ex.what());
-            } else if (ex.code() == beast::error::timeout) {
-                SPDLOG_ERROR("Remote session timed out; remote={}", fmt::streamed(remote));
+                             fmt::streamed(remote), ex.code().message());
+            } else if (ex.code() == beast::error::timeout ||
+                       ex.code() == asio::error::operation_aborted) {
+                SPDLOG_ERROR("Remote session timed out or cancelled; remote={} cause={}",
+                             fmt::streamed(remote), ex.code().message());
             } else {
-                SPDLOG_ERROR("Unhandled error for session; remote={} code={} what={}",
-                             fmt::streamed(remote), ex.code().value(), ex.what());
+                SPDLOG_ERROR("Unhandled error for session; remote={} what={}",
+                             fmt::streamed(remote), ex.what());
             }
         } catch (const std::exception& ex) {
             SPDLOG_ERROR("Unhandled error for session; remote={} what={}",

@@ -75,6 +75,8 @@ target_compile_definitions(Boost::asio
     $<$<BOOL:${WIN32}>:
       _WIN32_WINNT=0x0601
     >
+
+    BOOST_ASIO_NO_DEPRECATED=1
 )
 
 # Fix gcc-13 regression.
