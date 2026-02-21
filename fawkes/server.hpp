@@ -8,11 +8,14 @@
 #include <chrono>
 #include <cstdint>
 #include <exception>
+#include <stop_token>
 #include <string>
 #include <tuple>
 #include <utility>
 
 #include <boost/asio/awaitable.hpp>
+#include <boost/asio/cancellation_signal.hpp>
+#include <boost/asio/cancellation_state.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/core/tcp_stream.hpp>
@@ -80,6 +83,12 @@ public:
     }
 
     void listen_and_serve(const std::string& addr, std::uint16_t port);
+
+    void stop() {
+        [[maybe_unused]] boost::system::error_code ec;
+        acceptor_.close(ec);
+        stop_source_.request_stop();
+    }
 
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H>
@@ -162,7 +171,8 @@ public:
 private:
     asio::awaitable<void> do_listen();
 
-    [[nodiscard]] asio::awaitable<void> serve_session(beast::tcp_stream stream) const;
+    [[nodiscard]] asio::awaitable<void> serve_session(beast::tcp_stream stream,
+                                                      std::stop_token stop_token) const;
 
     [[nodiscard]] asio::awaitable<http::message_generator> handle_request(
         http::request<http::string_body> req) const;
@@ -174,6 +184,7 @@ private:
     io_thread_pool* io_pool_{nullptr};
     options opts_;
     asio::ip::tcp::endpoint endpoint_; // TODO(KC): do we really need to save it?
+    std::stop_source stop_source_;
     asio::ip::tcp::acceptor acceptor_;
     router router_;
 };

@@ -115,3 +115,32 @@ fawkes_clang_tidy_on_build(server_with_timeout)
 fawkes_source_folder(server_with_timeout TARGET_FOLDER "examples")
 
 target_precompile_headers(server_with_timeout REUSE_FROM fawkes::pch)
+
+#
+# Graceful shutdown
+#
+
+add_executable(graceful_shutdown)
+
+target_sources(graceful_shutdown
+  PRIVATE
+    graceful_shutdown.cpp
+)
+
+target_link_libraries(graceful_shutdown
+  PRIVATE
+    fawkes::fawkes
+    fmt::fmt
+    gflags::gflags
+    spdlog::spdlog
+)
+
+fawkes_common_compile_configs(graceful_shutdown)
+
+fawkes_use_sanitizers(graceful_shutdown)
+
+fawkes_clang_tidy_on_build(graceful_shutdown)
+
+fawkes_source_folder(graceful_shutdown TARGET_FOLDER "examples")
+
+target_precompile_headers(graceful_shutdown REUSE_FROM fawkes::pch)
