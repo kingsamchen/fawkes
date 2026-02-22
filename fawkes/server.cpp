@@ -87,11 +87,11 @@ response::impl_type&& prepare_response(response& resp) {
 } // namespace
 
 void server::listen_and_serve(const std::string& addr, std::uint16_t port) {
-    endpoint_ = asio::ip::tcp::endpoint(asio::ip::make_address(addr), port);
+    const auto endpoint = asio::ip::tcp::endpoint(asio::ip::make_address(addr), port);
 
-    acceptor_.open(endpoint_.protocol());
+    acceptor_.open(endpoint.protocol());
     acceptor_.set_option(asio::ip::tcp::acceptor::reuse_address{true});
-    acceptor_.bind(endpoint_);
+    acceptor_.bind(endpoint);
     acceptor_.listen(asio::socket_base::max_listen_connections);
     asio::co_spawn(io_ctx_, do_listen(), asio::detached);
 }
