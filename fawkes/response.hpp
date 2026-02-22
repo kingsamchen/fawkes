@@ -34,7 +34,6 @@ public:
     response(unsigned int version, bool keep_alive) {
         impl_.version(version);
         impl_.keep_alive(keep_alive);
-        impl_.set(http::field::server, BOOST_BEAST_VERSION_STRING);
     }
 
     [[nodiscard]] const impl_type::header_type& header() const noexcept {

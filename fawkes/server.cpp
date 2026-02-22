@@ -70,7 +70,6 @@ http::response<http::string_body> make_unexpected_error_response(unsigned int ht
                                                                  bool keep_alive,
                                                                  std::string&& body) {
     http::response<http::string_body> resp{http::status::internal_server_error, http_version};
-    resp.set(http::field::server, BOOST_BEAST_VERSION_STRING);
     resp.set(http::field::content_type, mime::json);
     resp.keep_alive(keep_alive);
     resp.body() = std::move(body);
@@ -164,7 +163,6 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
         if (beast::iequals(parser.get()[http::field::expect], expect_value)) {
             http::response<http::empty_body> continue_resp{http::status::continue_,
                                                            parser.get().version()};
-            continue_resp.set(http::field::server, BOOST_BEAST_VERSION_STRING);
             co_await http::async_write(stream, continue_resp);
         }
 
