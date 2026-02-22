@@ -183,7 +183,6 @@ private:
     asio::io_context& io_ctx_;
     io_thread_pool* io_pool_{nullptr};
     options opts_;
-    asio::ip::tcp::endpoint endpoint_; // TODO(KC): do we really need to save it?
     std::stop_source stop_source_;
     asio::ip::tcp::acceptor acceptor_;
     router router_;
