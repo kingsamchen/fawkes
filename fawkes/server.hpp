@@ -84,7 +84,18 @@ public:
 
     void listen_and_serve(const std::string& addr, std::uint16_t port);
 
+    // Not thread-safe, must be called on the thread running the acceptor's executor.
+    // This function initiates the shutdown of the server, and returns immediately.
     void stop() {
+#ifndef NDEBUG
+        {
+            const auto& ex = acceptor_.get_executor();
+            if (const auto* ex_ptr = ex.target<asio::io_context::executor_type>();
+                ex_ptr != nullptr) {
+                assert(ex_ptr->running_in_this_thread());
+            }
+        }
+#endif
         [[maybe_unused]] boost::system::error_code ec;
         acceptor_.close(ec);
         stop_source_.request_stop();
