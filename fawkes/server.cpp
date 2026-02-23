@@ -83,6 +83,18 @@ response::impl_type&& prepare_response(response& resp) {
     return std::move(impl);
 }
 
+void set_body_limit(http::request_parser<http::string_body>& parser, const server::options& opts) {
+    if (opts.request_body_limit == server::options::default_body_limit) {
+        return;
+    }
+
+    if (opts.request_body_limit != server::options::no_body_limit) {
+        parser.body_limit(opts.request_body_limit);
+    } else {
+        parser.body_limit(boost::none);
+    }
+}
+
 } // namespace
 
 void server::listen_and_serve(const std::string& addr, std::uint16_t port) {
@@ -166,7 +178,9 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
             co_await http::async_write(stream, continue_resp);
         }
 
+        // Read the body.
         if (!parser.is_done()) {
+            set_body_limit(parser, opts_);
             co_await http::async_read(stream, buf, parser);
         }
 
