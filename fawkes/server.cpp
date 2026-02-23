@@ -183,8 +183,8 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
         }
 
         if (beast::iequals(parser.get()[http::field::expect], expect_value)) {
-            http::response<http::empty_body> continue_resp{http::status::continue_,
-                                                           parser.get().version()};
+            const http::response<http::empty_body> continue_resp{http::status::continue_,
+                                                                 parser.get().version()};
             co_await http::async_write(stream, continue_resp);
         }
 
