@@ -56,7 +56,10 @@ int main(int argc, char* argv[]) {
                 // you may need to stop them first as well.
                 svc.stop();
 
+                // Wait for active io events to finish first.
                 io_pool.join();
+
+                // Then wait for auxiliary worker tasks to finish.
                 worker_pool.join();
 
                 SPDLOG_INFO("Signal handler exits");
