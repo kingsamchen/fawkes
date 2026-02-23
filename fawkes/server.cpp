@@ -170,7 +170,17 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
         }
 
         [[maybe_unused]] const auto before_read = std::chrono::steady_clock::now();
-        co_await http::async_read_header(stream, buf, parser);
+
+        boost::system::error_code ec;
+        const auto bytes_consumed = parser.put(buf.data(), ec);
+        if (ec && ec != http::error::need_more) {
+            throw std::system_error(ec);
+        }
+        buf.consume(bytes_consumed);
+
+        if (!parser.is_header_done()) {
+            co_await http::async_read_header(stream, buf, parser);
+        }
 
         if (beast::iequals(parser.get()[http::field::expect], expect_value)) {
             http::response<http::empty_body> continue_resp{http::status::continue_,
