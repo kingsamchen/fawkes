@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cstdint>
 #include <exception>
+#include <limits>
 #include <stop_token>
 #include <string>
 #include <tuple>
@@ -60,6 +61,13 @@ public:
             }
             return min > 0ms ? min : max;
         }
+
+        // Default request body limit is 1MB.
+        static constexpr std::size_t default_body_limit = 0U;
+        static constexpr std::size_t no_body_limit = std::numeric_limits<std::size_t>::max();
+
+        // Size in bytes.
+        std::size_t request_body_limit{options::default_body_limit};
     };
 
     explicit server(asio::io_context& io_ctx)
