@@ -1,4 +1,3 @@
-
 add_library(fawkes)
 
 add_library(fawkes::fawkes ALIAS fawkes)
@@ -28,11 +27,9 @@ target_sources(fawkes
     tree.cpp
     tree.hpp
 
-  $<$<BOOL:${WIN32}>:
-  >
+    $<$<BOOL:${WIN32}>:>
 
-  $<$<NOT:$<BOOL:${WIN32}>>:
-  >
+    $<$<NOT:$<BOOL:${WIN32}>>:>
 )
 
 target_include_directories(fawkes
@@ -63,7 +60,10 @@ fawkes_use_sanitizers(fawkes)
 
 fawkes_source_folder(fawkes)
 
-target_precompile_headers(fawkes REUSE_FROM fawkes::pch)
+target_precompile_headers(fawkes
+  REUSE_FROM
+    fawkes::pch
+)
 
 #
 # fawkes_tests
@@ -80,7 +80,6 @@ target_sources(fawkes_tests
     test_main.cpp
 
     cookie_test.cpp
-    io_thread_pool_test.cpp
     middlewares/cors_test.cpp
     request_test.cpp
     router_test.cpp
@@ -90,9 +89,10 @@ target_sources(fawkes_tests
 
 target_link_libraries(fawkes_tests
   PRIVATE
-    doctest::doctest
     fawkes::fawkes
     fawkes::test_utils
+
+    doctest::doctest
 )
 
 target_include_directories(fawkes_tests
@@ -108,6 +108,9 @@ fawkes_use_sanitizers(fawkes_tests)
 
 fawkes_source_folder(fawkes_tests)
 
-target_precompile_headers(fawkes_tests REUSE_FROM fawkes::pch)
+target_precompile_headers(fawkes_tests
+  REUSE_FROM
+    fawkes::pch
+)
 
 add_test(NAME FawkesTests COMMAND fawkes_tests)

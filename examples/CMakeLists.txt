@@ -27,7 +27,10 @@ fawkes_clang_tidy_on_build(ping_pong_svc)
 
 fawkes_source_folder(ping_pong_svc TARGET_FOLDER "examples")
 
-target_precompile_headers(ping_pong_svc REUSE_FROM fawkes::pch)
+target_precompile_headers(ping_pong_svc
+  REUSE_FROM
+    fawkes::pch
+)
 
 #
 # Using middlewares
@@ -56,7 +59,10 @@ fawkes_clang_tidy_on_build(use_middlewares)
 
 fawkes_source_folder(use_middlewares TARGET_FOLDER "examples")
 
-target_precompile_headers(use_middlewares REUSE_FROM fawkes::pch)
+target_precompile_headers(use_middlewares
+  REUSE_FROM
+    fawkes::pch
+)
 
 #
 # Using io_thread_pool
@@ -85,7 +91,10 @@ fawkes_clang_tidy_on_build(use_io_thread_pool)
 
 fawkes_source_folder(use_io_thread_pool TARGET_FOLDER "examples")
 
-target_precompile_headers(use_io_thread_pool REUSE_FROM fawkes::pch)
+target_precompile_headers(use_io_thread_pool
+  REUSE_FROM
+    fawkes::pch
+)
 
 #
 # Server with timeout
@@ -114,7 +123,10 @@ fawkes_clang_tidy_on_build(server_with_timeout)
 
 fawkes_source_folder(server_with_timeout TARGET_FOLDER "examples")
 
-target_precompile_headers(server_with_timeout REUSE_FROM fawkes::pch)
+target_precompile_headers(server_with_timeout
+  REUSE_FROM
+    fawkes::pch
+)
 
 #
 # Graceful shutdown
@@ -143,4 +155,7 @@ fawkes_clang_tidy_on_build(graceful_shutdown)
 
 fawkes_source_folder(graceful_shutdown TARGET_FOLDER "examples")
 
-target_precompile_headers(graceful_shutdown REUSE_FROM fawkes::pch)
+target_precompile_headers(graceful_shutdown
+  REUSE_FROM
+    fawkes::pch
+)
