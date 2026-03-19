@@ -5,9 +5,58 @@ export PYTHONWARNINGS="ignore::DeprecationWarning"
 hook_dir="$(dirname "${BASH_SOURCE[0]}")"
 scripts_dir="${hook_dir}/scripts"
 
-function run_clang_format_diff() {
-    echo "Running clang-format-diff..."
+run_lint() {
+  local title="$1"
+  shift 1
 
+  local tmp
+  tmp="$(mktemp)" || {
+    echo "failed to create temp file" >&2
+    return 1
+  }
+
+  local term_cols
+  term_cols="$(tput cols 2>/dev/null || echo 80)"
+
+  local cols=$(( term_cols * 2 / 3 ))
+  (( cols < 40 )) && cols=40
+
+  printf '%s' "$title"
+
+  "$@" >"$tmp" 2>&1
+  local rc=$?
+
+  local status
+  if [[ $rc -eq 0 ]]; then
+    status="Passed"
+  else
+    status="Failed"
+  fi
+
+  local title_len=${#title}
+  local status_len=${#status}
+  local dots_len=$(( cols - title_len - status_len ))
+  (( dots_len < 3 )) && dots_len=3
+
+  local dots
+  printf -v dots '%*s' "$dots_len" ''
+  dots=${dots// /.}
+
+  printf '\r%s%s%s\n' "$title" "$dots" "$status"
+
+  if [[ $rc -ne 0 ]]; then
+    echo
+    if [[ -s "$tmp" ]]; then
+      cat "$tmp"
+      tail -c 1 "$tmp" 2>/dev/null | read -r _ || echo
+    fi
+  fi
+
+  rm -f "$tmp"
+  return "$rc"
+}
+
+function run_clang_format_diff() {
     local fmt_diff=$(git diff --no-ext-diff -U0 --no-color --relative --cached | ${scripts_dir}/clang-format-diff.py -p1)
 
     local colorize_diff='
@@ -17,25 +66,28 @@ function run_clang_format_diff() {
 
     if [[ -n ${fmt_diff} ]]; then
         echo "${fmt_diff}" | awk "${colorize_diff}"
-        echo -e "\nPlease re-format above files before commit"
-        exit 1
+        return 1
     fi
-
-    echo "clang-format-diff passed"
 }
 
 function run_cpplint_check() {
-    echo "Running cpplint check..."
-
     local changed_files=$(git diff --cached --name-only | grep -iE '\.(cpp|cc|c|hpp|hh|h)$')
     if [[ -n ${changed_files} ]]; then
         ${scripts_dir}/cpplint.py --quiet ${changed_files}
         if [[ "$?" -ne 0 ]]; then
-            exit 1
+            return 1
         fi
     fi
+}
 
-    echo "cpplint check passed"
+function run_cmake_format_check() {
+    local changed_files=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '(^|/)CMakeLists\.txt$|\.cmake$')
+    if [[ -n ${changed_files} ]]; then
+        ${scripts_dir}/cmake-fmt.py --diff --color=always ${changed_files}
+        if [[ "$?" -ne 0 ]]; then
+            return 1
+        fi
+    fi
 }
 
 function detect_cxx_compiler() {
@@ -60,7 +112,7 @@ function run_clang_tidy_diff() {
 
     if [[ ! -f ${src_compile_db} ]]; then
         echo "${src_compile_db} not found, skip clang-tidy-diff"
-        exit 0
+        return 0
     fi
 
     if [[ $(detect_cxx_compiler) != "clang"  ]]; then
@@ -68,7 +120,7 @@ function run_clang_tidy_diff() {
         mkdir -p ${tmp_tidy_dir}
         ${scripts_dir}/rm-gxx-pch.py ${src_compile_db} "${tmp_tidy_dir}/compile_commands.json"
         if [[ $? -ne 0 ]]; then
-            exit 1
+            return 1
         fi
         compile_db_dir=${tmp_tidy_dir}
     fi
@@ -81,11 +133,12 @@ function run_clang_tidy_diff() {
                                           -path ${compile_db_dir} \
                                           -j $(($(nproc) / 2 + 1))
     if [[ "$?" -ne 0 ]]; then
-        exit 1
+        return 1
     fi
     echo "clang-tidy-diff passed"
 }
 
-run_clang_format_diff && \
-run_cpplint_check && \
-run_clang_tidy_diff
+run_lint "clang-format on diff" run_clang_format_diff && \
+run_lint "cpplint" run_cpplint_check && \
+run_lint "CMake Format" run_cmake_format_check && \
+run_lint "clang-tidy on diff" run_clang_tidy_diff

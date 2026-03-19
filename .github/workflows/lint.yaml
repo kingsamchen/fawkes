@@ -39,12 +39,19 @@ jobs:
 
       - name: Run cpplint
         run: |
-          cpplint --quiet --recursive fawkes examples
+          targets=(fawkes examples test_utils)
+          cpplint --quiet --recursive "${targets[@]}"
 
       - name: Run clang-format
         run: |
-          find fawkes examples -name '*.hpp' -o -name '*.cpp' |\
+          targets=(fawkes examples test_utils)
+          find "${targets[@]}" -type f -regextype posix-extended -regex '.*\.(hpp|h|cpp|cc|c)$' |\
             xargs clang-format-21 --dry-run -Werror
+
+      - name: Run cmake-fmt
+        run: |
+          targets=(cmake examples fawkes test_utils CMakeLists.txt)
+          .githooks/scripts/cmake-fmt.py --diff "${targets[@]}"
 
       - name: Run clang-tidy
         env:
@@ -53,4 +60,4 @@ jobs:
         run: |
           cmake --preset linux-ci -DFAWKES_USE_SANITIZERS="" -DFAWKES_BUILD_EXAMPLES=ON \
             -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON -DCMAKE_CXX_SCAN_FOR_MODULES=OFF
-          run-clang-tidy-21 -p out/linux-ci -source-filter '.*\/fawkes\/(fawkes|examples)\/.*'
+          run-clang-tidy-21 -p out/linux-ci -source-filter '.*\/fawkes\/(fawkes|examples|test_utils)\/.*'
