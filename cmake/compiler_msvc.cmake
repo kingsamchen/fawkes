@@ -1,4 +1,3 @@
-
 include(${FAWKES_CMAKE_DIR}/utils.cmake)
 
 option(FAWKES_USE_MSVC_PARALLEL_BUILD "If enabled, build multiple files in parallel." ON)
@@ -23,6 +22,7 @@ function(fawkes_common_compile_configs TARGET)
       PUBLIC
         _UNICODE
         UNICODE
+
         NOMINMAX
 
         $<$<CONFIG:DEBUG>:
@@ -36,16 +36,16 @@ function(fawkes_common_compile_configs TARGET)
       PRIVATE
         /W4
         /WX
-        /wd4819 # source characters not in current code page.
-
-        /Zc:inline            # Have the compiler eliminate unreferenced COMDAT functions and data before emitting the object file.
-        /Zc:rvalueCast        # Enforce the standard rules for explicit type conversion.
-        /Zc:strictStrings     # Don't allow conversion from a string literal to mutable characters.
-        /Zc:threadSafeInit    # Enable thread-safe function-local statics initialization.
 
         /utf-8
+        /wd4819 # source characters not in current code page.
 
-        /permissive-  # Be mean, don't allow bad non-standard stuff (C++/CLI, __declspec, etc. are all left intact).
+        /Zc:inline # Have the compiler eliminate unreferenced COMDAT functions and data before emitting the object file.
+        /Zc:rvalueCast # Enforce the standard rules for explicit type conversion.
+        /Zc:strictStrings # Don't allow conversion from a string literal to mutable characters.
+        /Zc:threadSafeInit # Enable thread-safe function-local statics initialization.
+
+        /permissive- # Be mean, don't allow bad non-standard stuff (C++/CLI, __declspec, etc. are all left intact).
 
         $<$<BOOL:FAWKES_USE_MSVC_PARALLEL_BUILD>:/MP>
     )
@@ -54,6 +54,7 @@ function(fawkes_common_compile_configs TARGET)
       INTERFACE
         _UNICODE
         UNICODE
+
         NOMINMAX
 
         $<$<CONFIG:DEBUG>:

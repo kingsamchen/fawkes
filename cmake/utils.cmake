@@ -1,4 +1,3 @@
-
 function(fawkes_get_target_type TARGET TARGET_TYPE)
   get_target_property(target_type ${TARGET} TYPE)
 
@@ -35,7 +34,7 @@ function(fawkes_source_folder TARGET)
   get_target_property(TARGET_SRC_FILES ${TARGET} SOURCES)
   source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${TARGET_SRC_FILES})
 
-  if (DEFINED ARGS_TARGET_FOLDER AND NOT ARGS_TARGET_FOLDER STREQUAL "")
+  if(DEFINED ARGS_TARGET_FOLDER AND NOT ARGS_TARGET_FOLDER STREQUAL "")
     set_target_properties(${TARGET} PROPERTIES FOLDER "${ARGS_TARGET_FOLDER}")
   endif()
 endfunction()

@@ -1,4 +1,3 @@
-
 include(${FAWKES_CMAKE_DIR}/utils.cmake)
 
 if(FAWKES_NOT_SUBPROJECT)
@@ -26,17 +25,25 @@ function(fawkes_common_compile_configs TARGET)
     target_compile_options(${TARGET}
       PRIVATE
         -Wall
-        -Wextra
         -Werror
+        -Wextra
+        -Wpedantic
+
+        # enhanced
         -Wconversion
         -Wdouble-promotion
+        -Wimplicit-fallthrough
+        -Wnon-virtual-dtor
+        -Wnull-dereference
         -Wold-style-cast
         -Woverloaded-virtual
         -Wpointer-arith
         -Wshadow
         -Wsign-conversion
-        -Wno-unused-function
+
+        # supress
         -Wno-error=deprecated
+        -Wno-unused-function
     )
   else()
     target_compile_definitions(${TARGET}

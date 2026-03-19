@@ -1,6 +1,6 @@
-
 set(FAWKES_USE_SANITIZERS "" CACHE STRING
-  "Options are, case-insensitive: ASAN, UBSAN, TSAN. use ; to separate multiple sanitizer")
+  "Options are, case-insensitive: ASAN, UBSAN, TSAN. use ; to separate multiple sanitizer"
+)
 message(STATUS "FAWKES_USE_SANITIZERS = ${FAWKES_USE_SANITIZERS}")
 
 set(FAWKES_SANITIZER_COMPILE_FLAGS "")

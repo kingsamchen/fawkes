@@ -1,4 +1,3 @@
-
 set(FAWKES_PCH_HEADERS_BASE
   "<algorithm>"
   "<any>"

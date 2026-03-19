@@ -1,12 +1,12 @@
-
 option(FAWKES_CLANG_TIDY_ON_BUILD "Enable clang-tidy on build" OFF)
 message(STATUS "FAWKES_CLANG_TIDY_ON_BUILD = ${FAWKES_CLANG_TIDY_ON_BUILD}")
 
 if(FAWKES_CLANG_TIDY_ON_BUILD)
   find_program(CLANG_TIDY_EXE
-               NAMES clang-tidy
-               DOC "Path to clang-tidy executable"
-               REQUIRED)
+    NAMES clang-tidy
+    DOC "Path to clang-tidy executable"
+    REQUIRED
+  )
   message(STATUS "Found clang-tidy = ${CLANG_TIDY_EXE}")
 endif()
 
