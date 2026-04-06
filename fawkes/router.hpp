@@ -126,4 +126,7 @@ private:
     middleware_chain base_middlewares_;
 };
 
+static_assert(std::is_nothrow_move_constructible_v<router>);
+static_assert(std::is_nothrow_move_assignable_v<router>);
+
 } // namespace fawkes
