@@ -129,7 +129,9 @@ asio::awaitable<void> server::do_listen() {
         auto remote_endpoint = sock.remote_endpoint();
         beast::tcp_stream stream(std::move(sock));
         asio::co_spawn(executor, serve_session(std::move(stream), stop_source_.get_token()),
-                       std::bind_front(handle_session_error, std::move(remote_endpoint)));
+                       [endpoint = std::move(remote_endpoint)](std::exception_ptr eptr) {
+                           handle_session_error(endpoint, eptr);
+                       });
     }
 }
 

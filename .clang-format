@@ -41,7 +41,7 @@ ShortNamespaceLines: 0
 SkipMacroDefinitionBody: true
 SpaceAfterTemplateKeyword: false
 SpaceBeforeParens: ControlStatementsExceptControlMacros
-Standard: c++20
+Standard: Latest
 WrapNamespaceBodyWithEmptyLines: Always
 
 ---

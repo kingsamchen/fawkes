@@ -28,7 +28,7 @@ class path_params {
 public:
     // Caller must make sure the `key` and the `value` outlive the path_params.
     void add(std::string_view key, std::string_view value) {
-        ps_.push_back({key, value});
+        ps_.push_back({.key = key, .value = value});
     }
 
     // Throws `std::out_of_range` if there is no match.

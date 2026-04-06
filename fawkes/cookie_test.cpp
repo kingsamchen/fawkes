@@ -122,7 +122,14 @@ TEST_CASE("Malformed cookie entry") {
         req_header.set(http::field::cookie, "key=a b");
         auto [begin, end] = req_header.equal_range(http::field::cookie);
         const fawkes::cookie_view cv(begin, end);
-        INFO(cv.get("key").value()); // NOLINT(bugprone-unchecked-optional-access)
+        INFO(cv.get("key").has_value());
+        CHECK(cv.empty());
+    }
+
+    SUBCASE("the entry contains only whitespaces") {
+        req_header.set(http::field::cookie, "    ");
+        auto [begin, end] = req_header.equal_range(http::field::cookie);
+        const fawkes::cookie_view cv(begin, end);
         CHECK(cv.empty());
     }
 }
