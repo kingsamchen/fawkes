@@ -73,7 +73,7 @@ private:
               guard(io_ctx_ptr->get_executor()) {}
     };
 
-    static_assert(std::is_move_constructible_v<thread_context>);
+    static_assert(std::is_nothrow_move_constructible_v<thread_context>);
 
     std::vector<thread_context> pool_;
     std::atomic<std::size_t> next_io_executor_{0U};

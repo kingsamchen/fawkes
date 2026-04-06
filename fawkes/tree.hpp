@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -133,5 +134,8 @@ private:
 
     friend class node_test_inspector;
 };
+
+static_assert(std::is_nothrow_move_constructible_v<node>);
+static_assert(std::is_nothrow_move_assignable_v<node>);
 
 } // namespace fawkes

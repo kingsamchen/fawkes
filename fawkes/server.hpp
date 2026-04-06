@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cstdint>
 #include <exception>
+#include <functional>
 #include <limits>
 #include <stop_token>
 #include <string>
@@ -72,17 +73,17 @@ public:
 
     explicit server(asio::io_context& io_ctx)
         : io_ctx_(io_ctx),
-          acceptor_(io_ctx_) {}
+          acceptor_(io_ctx_.get()) {}
 
     server(asio::io_context& io_ctx, io_thread_pool& io_pool)
         : io_ctx_(io_ctx),
           io_pool_(&io_pool),
-          acceptor_(io_ctx_) {}
+          acceptor_(io_ctx_.get()) {}
 
+    server(server&& other) noexcept = default;
     ~server() = default;
 
     server(const server&) = delete;
-    server(server&&) = delete;
     server& operator=(const server&) = delete;
     server& operator=(server&&) = delete;
 
@@ -199,7 +200,7 @@ private:
     static void handle_session_error(const asio::ip::tcp::endpoint& remote,
                                      std::exception_ptr eptr);
 
-    asio::io_context& io_ctx_;
+    std::reference_wrapper<asio::io_context> io_ctx_;
     io_thread_pool* io_pool_{nullptr};
     options opts_;
     std::stop_source stop_source_;

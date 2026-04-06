@@ -104,7 +104,7 @@ void server::listen_and_serve(const std::string& addr, std::uint16_t port) {
     acceptor_.set_option(asio::ip::tcp::acceptor::reuse_address{true});
     acceptor_.bind(endpoint);
     acceptor_.listen(asio::socket_base::max_listen_connections);
-    asio::co_spawn(io_ctx_, do_listen(), asio::detached);
+    asio::co_spawn(io_ctx_.get(), do_listen(), asio::detached);
 }
 
 asio::awaitable<void> server::do_listen() {
