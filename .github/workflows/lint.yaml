@@ -21,7 +21,7 @@ jobs:
       - name: Add repository for clang-format and clang-tidy
         run: |
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          sudo add-apt-repository -y deb http://apt.llvm.org/noble/ llvm-toolchain-noble-21 main
+          sudo add-apt-repository -y deb http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main
 
       - name: Add Ubuntu mirrors
         run: |
@@ -34,8 +34,8 @@ jobs:
       - name: Install required tools
         run: |
           sudo apt update
-          sudo apt install -y clang-21 clang-format-21 clang-tidy-21 ninja-build
-          sudo pip3 install cpplint
+          sudo apt install -y clang-22 clang-format-22 clang-tidy-22 ninja-build
+          sudo pip3 install cpplint cmake
 
       - name: Run cpplint
         run: |
@@ -46,7 +46,7 @@ jobs:
         run: |
           targets=(fawkes examples test_utils)
           find "${targets[@]}" -type f -regextype posix-extended -regex '.*\.(hpp|h|cpp|cc|c)$' |\
-            xargs clang-format-21 --dry-run -Werror
+            xargs clang-format-22 --dry-run -Werror
 
       - name: Run cmake-fmt
         run: |
@@ -55,9 +55,9 @@ jobs:
 
       - name: Run clang-tidy
         env:
-          CC: clang-21
-          CXX: clang++-21
+          CC: clang-22
+          CXX: clang++-22
         run: |
           cmake --preset linux-ci -DFAWKES_USE_SANITIZERS="" -DFAWKES_BUILD_EXAMPLES=ON \
             -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON -DCMAKE_CXX_SCAN_FOR_MODULES=OFF
-          run-clang-tidy-21 -p out/linux-ci -source-filter '.*\/fawkes\/(fawkes|examples|test_utils)\/.*'
+          run-clang-tidy-22 -p out/linux-ci -source-filter '.*\/fawkes\/(fawkes|examples|test_utils)\/.*'

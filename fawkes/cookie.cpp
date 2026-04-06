@@ -65,7 +65,7 @@ void cookie_view::parse_cookie_value(std::string_view cookie_value) {
                           .to<std::vector<std::string_view>>();
         // Must be `key=value`, while the `value` is allowed to be empty but the `name` can't
         // be empty.
-        if (fields.size() > 2 || fields[0].empty()) {
+        if (fields.size() > 2 || fields.empty() || fields[0].empty()) {
             SPDLOG_WARN("Malformed cookie entry, skipped; cookie={}", trimmed);
             continue;
         }

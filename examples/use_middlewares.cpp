@@ -33,6 +33,8 @@ namespace http = boost::beast::http;
 
 DEFINE_uint32(port, 7890, "Port number to listen on");
 
+namespace {
+
 struct log_access {
     static fawkes::middleware_result pre_handle(fawkes::request& req, fawkes::response& /*resp*/) {
         SPDLOG_INFO("Entering {} {}", req.header().method_string(), req.target());
@@ -71,6 +73,8 @@ struct coro_delayed {
         co_return fawkes::middleware_result::proceed;
     }
 };
+
+} // namespace
 
 int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
