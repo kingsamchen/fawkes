@@ -60,7 +60,7 @@ public:
             return std::nullopt;
         }
 
-        return std::string(it->second.begin(), it->second.end());
+        return std::make_optional<std::string>(it->second.begin(), it->second.end());
     }
 
 private:

@@ -63,7 +63,7 @@ public:
         // The lambda coroutine is stored and kept alive in routes.
         route_handler_t route_handler =
             [mws = std::move(middlewares), // NOLINT(*-avoid-capturing-lambda-coroutines)
-             user_handler = std::move(hd)](request& req, response& resp) mutable
+             user_handler = std::move(hd)](request& req, response& resp)
             -> asio::awaitable<middleware_result> {
             using enum middleware_result;
 
@@ -127,6 +127,6 @@ private:
 };
 
 static_assert(std::is_nothrow_move_constructible_v<router>);
-static_assert(std::is_nothrow_move_assignable_v<router>);
+static_assert(std::is_move_assignable_v<router>);
 
 } // namespace fawkes

@@ -113,10 +113,16 @@ TEST_CASE("Concept is_middleware") {
     }
 }
 
+//
+// WARNING: modifying non-local data in either middleware handler is dangerous, as data is likely
+// subject to data-race, casued by concurrent access from multiple connections.
+//
+
 struct m_count_pre_t {
     int* pre_cnt{nullptr};
 
-    fawkes::middleware_result pre_handle(fawkes::request& /*req*/, fawkes::response& /*resp*/) {
+    fawkes::middleware_result pre_handle(fawkes::request& /*req*/,
+                                         fawkes::response& /*resp*/) const {
         esl::ignore_unused(this);
         ++(*pre_cnt);
         return fawkes::middleware_result::proceed;
@@ -126,7 +132,8 @@ struct m_count_pre_t {
 struct m_count_post_t {
     int* post_cnt{nullptr};
 
-    fawkes::middleware_result post_handle(fawkes::request& /*req*/, fawkes::response& /*resp*/) {
+    fawkes::middleware_result post_handle(fawkes::request& /*req*/,
+                                          fawkes::response& /*resp*/) const {
         esl::ignore_unused(this);
         ++(*post_cnt);
         return fawkes::middleware_result::proceed;
@@ -137,13 +144,15 @@ struct m_count_both_t {
     int* pre_cnt{nullptr};
     int* post_cnt{nullptr};
 
-    fawkes::middleware_result pre_handle(fawkes::request& /*req*/, fawkes::response& /*resp*/) {
+    fawkes::middleware_result pre_handle(fawkes::request& /*req*/,
+                                         fawkes::response& /*resp*/) const {
         esl::ignore_unused(this);
         ++(*pre_cnt);
         return fawkes::middleware_result::proceed;
     }
 
-    fawkes::middleware_result post_handle(fawkes::request& /*req*/, fawkes::response& /*resp*/) {
+    fawkes::middleware_result post_handle(fawkes::request& /*req*/,
+                                          fawkes::response& /*resp*/) const {
         esl::ignore_unused(this);
         ++(*post_cnt);
         return fawkes::middleware_result::proceed;

@@ -27,7 +27,7 @@
 namespace fawkes {
 
 using route_handler_t =
-    std::function<boost::asio::awaitable<middleware_result>(request&, response&)>;
+    std::move_only_function<boost::asio::awaitable<middleware_result>(request&, response&) const>;
 
 namespace detail {
 
@@ -135,7 +135,8 @@ private:
     friend class node_test_inspector;
 };
 
+// `std::move_only_function<>` is not mandated to be nothrow move-assignable.
 static_assert(std::is_nothrow_move_constructible_v<node>);
-static_assert(std::is_nothrow_move_assignable_v<node>);
+static_assert(std::is_move_assignable_v<node>);
 
 } // namespace fawkes
