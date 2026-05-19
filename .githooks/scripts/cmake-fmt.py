@@ -8,7 +8,7 @@ Usage:
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.1.20260502"
 
 import argparse
 import sys
@@ -329,18 +329,29 @@ TARGET_COMMANDS = frozenset(
 )
 
 _VISIBILITY_KEYWORDS = frozenset({"PRIVATE", "PUBLIC", "INTERFACE"})
+_SYSTEM_VISIBILITY_KEYWORDS = frozenset({
+    "SYSTEM PRIVATE", "SYSTEM PUBLIC", "SYSTEM INTERFACE",
+})
 
 COMMAND_KEYWORDS: dict[str, frozenset[str]] = {
     "target_sources": _VISIBILITY_KEYWORDS,
     "target_link_libraries": _VISIBILITY_KEYWORDS,
-    "target_include_directories": _VISIBILITY_KEYWORDS,
+    "target_include_directories": (
+        _VISIBILITY_KEYWORDS | _SYSTEM_VISIBILITY_KEYWORDS
+    ),
     "target_compile_definitions": _VISIBILITY_KEYWORDS,
     "target_compile_options": _VISIBILITY_KEYWORDS,
     "target_compile_features": _VISIBILITY_KEYWORDS,
     "target_link_options": _VISIBILITY_KEYWORDS,
-    "target_link_directories": _VISIBILITY_KEYWORDS,
+    "target_link_directories": (
+        _VISIBILITY_KEYWORDS | _SYSTEM_VISIBILITY_KEYWORDS
+    ),
     "target_precompile_headers": _VISIBILITY_KEYWORDS | {"REUSE_FROM"},
 }
+
+PAIR_KEYWORDS = frozenset({"PROPERTIES"})
+
+SORTABLE_COMMANDS = frozenset({"add_subdirectory", "find_package"})
 
 
 class CMakeFormatter:
@@ -396,6 +407,10 @@ class CMakeFormatter:
                 line += f" {cmd.trailing_comment}"
             return line
 
+        has_pair_kw = any(v in PAIR_KEYWORDS for v in arg_values)
+        if has_pair_kw:
+            return self._format_regular_with_pairs(cmd)
+
         is_multiline = "\n" in cmd.raw_args and len(arg_values) > 1
         if not is_multiline:
             line = f"{base}{name}({' '.join(arg_values)})"
@@ -404,12 +419,20 @@ class CMakeFormatter:
             return line
 
         parsed_lines = _parse_raw_arg_lines(cmd.raw_args)
-        first_args, first_cmt = parsed_lines[0]
-        head = f"{base}{name}({first_args}"
-        if first_cmt:
-            head += f" {first_cmt}"
-        lines: list[str] = [head]
-        for args_str, cmt in parsed_lines[1:]:
+        first_on_own_line = cmd.raw_args.lstrip(" \t").startswith("\n")
+
+        if first_on_own_line:
+            lines: list[str] = [f"{base}{name}("]
+            body_lines = parsed_lines
+        else:
+            first_args, first_cmt = parsed_lines[0]
+            head = f"{base}{name}({first_args}"
+            if first_cmt:
+                head += f" {first_cmt}"
+            lines: list[str] = [head]
+            body_lines = parsed_lines[1:]
+
+        for args_str, cmt in body_lines:
             if not args_str and not cmt:
                 lines.append("")
             elif args_str and cmt:
@@ -418,6 +441,69 @@ class CMakeFormatter:
                 lines.append(f"{base}{i1}{args_str}")
             else:
                 lines.append(f"{base}{i1}{cmt}")
+        lines.append(f"{base})")
+        result = "\n".join(lines)
+        if cmd.trailing_comment:
+            result += f" {cmd.trailing_comment}"
+        return result
+
+    def _format_regular_with_pairs(self, cmd: Command) -> str:
+        """Format a regular command containing pair keywords
+        like PROPERTIES, ensuring each key-value pair is on its
+        own indented line.
+        """
+        base = self._base_indent()
+        name = cmd.name.lower()
+        i1 = " " * self.indent_size
+        i2 = " " * (self.indent_size * 2)
+
+        parsed_lines = _parse_raw_arg_lines(cmd.raw_args)
+        first_on_own_line = cmd.raw_args.lstrip(" \t").startswith("\n")
+
+        if first_on_own_line:
+            lines: list[str] = [f"{base}{name}("]
+            body_lines = parsed_lines
+        else:
+            first_args_str, first_cmt = parsed_lines[0]
+            first_tokens, _ = _parse_line(first_args_str)
+            pk_in_first = any(t in PAIR_KEYWORDS for t in first_tokens)
+
+            if pk_in_first:
+                pk_idx = next(
+                    j
+                    for j, t in enumerate(first_tokens)
+                    if t in PAIR_KEYWORDS
+                )
+                before = first_tokens[:pk_idx]
+                if before:
+                    lines = [f"{base}{name}({' '.join(before)}"]
+                else:
+                    lines = [f"{base}{name}("]
+                rest = first_tokens[pk_idx:]
+                rest_str = " ".join(rest)
+                body_lines = [
+                    (rest_str, first_cmt)
+                ] + parsed_lines[1:]
+            else:
+                head = f"{base}{name}({first_args_str}"
+                if first_cmt:
+                    head += f" {first_cmt}"
+                lines = [head]
+                body_lines = parsed_lines[1:]
+
+        expanded = _expand_pair_keywords(body_lines)
+        for args_str, cmt, is_pair in expanded:
+            if not args_str and not cmt:
+                lines.append("")
+            else:
+                indent = f"{base}{i2}" if is_pair else f"{base}{i1}"
+                if args_str and cmt:
+                    lines.append(f"{indent}{args_str} {cmt}")
+                elif args_str:
+                    lines.append(f"{indent}{args_str}")
+                else:
+                    lines.append(f"{indent}{cmt}")
+
         lines.append(f"{base})")
         result = "\n".join(lines)
         if cmd.trailing_comment:
@@ -434,6 +520,7 @@ class CMakeFormatter:
         base = self._base_indent()
         name = cmd.name.lower()
         keywords = COMMAND_KEYWORDS.get(name, _VISIBILITY_KEYWORDS)
+        tokens = _merge_system_visibility(tokens, keywords)
         i1 = " " * self.indent_size
         i2 = " " * (self.indent_size * 2)
 
@@ -519,6 +606,120 @@ def _parse_raw_arg_lines(raw_args: str) -> list[tuple[str, str]]:
         result.pop()
     while result and result[0] == ("", ""):
         result.pop(0)
+    return result
+
+
+def _expand_pair_keywords(
+    body_lines: list[tuple[str, str]],
+) -> list[tuple[str, str, bool]]:
+    """Expand lines containing pair keywords (e.g. PROPERTIES).
+
+    Returns (args_str, comment, is_pair_value) triples where
+    *is_pair_value* is True for key-value pair lines that need
+    extra indentation.
+    """
+    result: list[tuple[str, str, bool]] = []
+    in_pair_section = False
+
+    for args_str, cmt in body_lines:
+        if not args_str and not cmt:
+            result.append(("", "", False))
+            in_pair_section = False
+            continue
+
+        if not args_str:
+            result.append(("", cmt, in_pair_section))
+            continue
+
+        tokens, _ = _parse_line(args_str)
+
+        pk_idx: int | None = None
+        for j, tok in enumerate(tokens):
+            if tok in PAIR_KEYWORDS:
+                pk_idx = j
+                break
+
+        if pk_idx is not None:
+            before = tokens[:pk_idx]
+            kw = tokens[pk_idx]
+            after = tokens[pk_idx + 1:]
+
+            if before:
+                result.append((" ".join(before), "", False))
+
+            in_pair_section = True
+
+            if not after:
+                result.append((kw, cmt, False))
+            else:
+                result.append((kw, "", False))
+                k = 0
+                while k + 1 < len(after):
+                    is_last = k + 2 >= len(after)
+                    result.append(
+                        (
+                            f"{after[k]} {after[k + 1]}",
+                            cmt if is_last else "",
+                            True,
+                        )
+                    )
+                    k += 2
+                if k < len(after):
+                    result.append((after[k], cmt, True))
+            continue
+
+        if in_pair_section:
+            k = 0
+            while k + 1 < len(tokens):
+                is_last = k + 2 >= len(tokens)
+                result.append(
+                    (
+                        f"{tokens[k]} {tokens[k + 1]}",
+                        cmt if is_last else "",
+                        True,
+                    )
+                )
+                k += 2
+            if k < len(tokens):
+                result.append((tokens[k], cmt, True))
+        else:
+            result.append((args_str, cmt, False))
+
+    return result
+
+
+# -- SYSTEM keyword merging --------------------------------------------------
+
+
+def _merge_system_visibility(
+    tokens: list[ArgElement],
+    keywords: frozenset[str],
+) -> list[ArgElement]:
+    """Merge adjacent SYSTEM + visibility-keyword tokens into one.
+
+    Only merges when the combined value (e.g. "SYSTEM PRIVATE") is
+    present in *keywords*, so it is safe to call unconditionally.
+    """
+    result: list[ArgElement] = []
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        if (
+            isinstance(tok, ArgItem)
+            and tok.value == "SYSTEM"
+            and i + 1 < len(tokens)
+            and isinstance(tokens[i + 1], ArgItem)
+        ):
+            merged = f"SYSTEM {tokens[i + 1].value}"
+            if merged in keywords:
+                comment = tokens[i + 1].comment or tok.comment
+                result.append(
+                    ArgItem(value=merged, comment=comment)
+                )
+                i += 2
+                continue
+        result.append(tok)
+        i += 1
     return result
 
 
@@ -753,6 +954,50 @@ def _format_genexpr_unit(
     return lines
 
 
+# -- block sorting -----------------------------------------------------------
+
+
+def _command_sort_key(cmd: Command) -> str:
+    """Extract the first argument from a command for sorting."""
+    tokens = _tokenize_args(cmd.raw_args)
+    for tok in tokens:
+        if isinstance(tok, ArgItem) and tok.value:
+            return tok.value.lower()
+    return ""
+
+
+def _sort_command_blocks(elements: list[FileElement]) -> list[FileElement]:
+    """Sort consecutive blocks of add_subdirectory / find_package calls."""
+    result: list[FileElement] = []
+    block: list[Command] = []
+    block_name: str = ""
+
+    def flush():
+        nonlocal block, block_name
+        if len(block) >= 2:
+            block.sort(key=_command_sort_key)
+        result.extend(block)
+        block = []
+        block_name = ""
+
+    for elem in elements:
+        if isinstance(elem, Command):
+            lo = elem.name.lower()
+            if lo in SORTABLE_COMMANDS:
+                if block_name == lo:
+                    block.append(elem)
+                else:
+                    flush()
+                    block = [elem]
+                    block_name = lo
+                continue
+        flush()
+        result.append(elem)
+
+    flush()
+    return result
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # CLI
 # ═══════════════════════════════════════════════════════════════════════════
@@ -760,6 +1005,7 @@ def _format_genexpr_unit(
 
 def format_text(text: str, indent: int = 2) -> str:
     elements = CMakeParser(text).parse()
+    elements = _sort_command_blocks(elements)
     formatter = CMakeFormatter(indent_size=indent)
     return formatter.format(elements)
 

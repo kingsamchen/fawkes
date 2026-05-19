@@ -16,10 +16,11 @@ function(fawkes_clang_tidy_on_build TARGET)
   endif()
 
   if(MSVC AND CMAKE_GENERATOR MATCHES "Visual Studio")
-    set_target_properties(${TARGET} PROPERTIES
-      VS_GLOBAL_RunCodeAnalysis true
-      VS_GLOBAL_EnableClangTidyCodeAnalysis true
-      VS_GLOBAL_EnableMicrosoftCodeAnalysis false
+    set_target_properties(${TARGET}
+      PROPERTIES
+        VS_GLOBAL_RunCodeAnalysis true
+        VS_GLOBAL_EnableClangTidyCodeAnalysis true
+        VS_GLOBAL_EnableMicrosoftCodeAnalysis false
     )
   else()
     set(CLANG_TIDY_COMMAND
@@ -28,8 +29,9 @@ function(fawkes_clang_tidy_on_build TARGET)
       "--extra-arg-before=--driver-mode=c++"
       "-p" "'${CMAKE_BINARY_DIR}'"
     )
-    set_target_properties(${TARGET} PROPERTIES
-      CXX_CLANG_TIDY "${CLANG_TIDY_COMMAND}"
+    set_target_properties(${TARGET}
+      PROPERTIES
+        CXX_CLANG_TIDY "${CLANG_TIDY_COMMAND}"
     )
   endif()
 endfunction()
