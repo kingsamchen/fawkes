@@ -30,4 +30,7 @@ fawkes_use_sanitizers(test_utils)
 fawkes_source_folder(test_utils)
 
 # Force MSVC use CXX linker.
-set_target_properties(test_utils PROPERTIES LINKER_LANGUAGE CXX)
+set_target_properties(test_utils
+  PROPERTIES
+    LINKER_LANGUAGE CXX
+)
