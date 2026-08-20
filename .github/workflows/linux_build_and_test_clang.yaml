@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     strategy:
       matrix:
@@ -35,9 +35,9 @@ jobs:
       - name: Add repositories for newer Clang
         run: |
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          sudo add-apt-repository -y deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main
-          sudo add-apt-repository -y deb http://apt.llvm.org/noble/ llvm-toolchain-noble-21 main
-          sudo add-apt-repository -y deb http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main
+          # sudo add-apt-repository -y deb http://apt.llvm.org/resolute/ llvm-toolchain-resolute-20 main
+          sudo add-apt-repository -y deb http://apt.llvm.org/resolute/ llvm-toolchain-resolute-21 main
+          sudo add-apt-repository -y deb http://apt.llvm.org/resolute/ llvm-toolchain-resolute-22 main
 
       - name: Add Ubuntu mirrors
         run: |
