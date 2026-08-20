@@ -47,6 +47,7 @@ target_link_libraries(fawkes
   PUBLIC
     Boost::asio
     Boost::beast
+    Boost::core
     Boost::json
     Boost::url
     Threads::Threads

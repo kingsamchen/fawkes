@@ -140,7 +140,7 @@ void node::insert_route(std::string_view path, std::string_view full_path,
         indices_ += idxc;
         children_.push_back(std::make_unique<node>());
         auto& child = *children_.back();
-        esl::ignore_unused(increment_child_priority(indices_.size() - 1));
+        boost::ignore_unused(increment_child_priority(indices_.size() - 1));
         child.insert_path(path, full_path, detail::unknown_wildcard, std::move(handler));
         return;
     }

@@ -18,8 +18,8 @@
 #include <boost/beast/http/verb.hpp>
 #include <boost/container/flat_map.hpp>
 #include <boost/container/static_vector.hpp>
+#include <boost/core/ignore_unused.hpp>
 #include <boost/unordered/unordered_flat_set.hpp>
-#include <esl/ignore_unused.h>
 #include <esl/utility.h>
 
 #include "fawkes/middleware.hpp"
@@ -126,7 +126,7 @@ private:
     static void apply_headers(const http_header& src_hdrs,
                               response::impl_type::header_type& resp_hdr) {
         for (const auto& src_hdr : src_hdrs) {
-            esl::ignore_unused(resp_hdr.erase(src_hdr.first));
+            boost::ignore_unused(resp_hdr.erase(src_hdr.first));
         }
 
         for (const auto& [name, values] : src_hdrs) {

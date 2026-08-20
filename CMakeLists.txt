@@ -63,6 +63,7 @@ include(${FAWKES_CMAKE_DIR}/utils.cmake)
 
 find_package(Boost CONFIG REQUIRED COMPONENTS asio)
 find_package(Boost CONFIG REQUIRED COMPONENTS beast)
+find_package(Boost CONFIG REQUIRED COMPONENTS core)
 find_package(Boost CONFIG REQUIRED COMPONENTS json)
 find_package(Boost CONFIG REQUIRED COMPONENTS url)
 find_package(doctest CONFIG REQUIRED)

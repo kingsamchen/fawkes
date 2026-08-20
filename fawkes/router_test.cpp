@@ -8,8 +8,8 @@
 
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/io_context.hpp>
+#include <boost/core/ignore_unused.hpp>
 #include <doctest/doctest.h>
-#include <esl/ignore_unused.h>
 
 #include "fawkes/middleware.hpp"
 #include "fawkes/request.hpp"
@@ -123,7 +123,7 @@ struct m_count_pre_t {
 
     fawkes::middleware_result pre_handle(fawkes::request& /*req*/,
                                          fawkes::response& /*resp*/) const {
-        esl::ignore_unused(this);
+        boost::ignore_unused(this);
         ++(*pre_cnt);
         return fawkes::middleware_result::proceed;
     }
@@ -134,7 +134,7 @@ struct m_count_post_t {
 
     fawkes::middleware_result post_handle(fawkes::request& /*req*/,
                                           fawkes::response& /*resp*/) const {
-        esl::ignore_unused(this);
+        boost::ignore_unused(this);
         ++(*post_cnt);
         return fawkes::middleware_result::proceed;
     }
@@ -146,14 +146,14 @@ struct m_count_both_t {
 
     fawkes::middleware_result pre_handle(fawkes::request& /*req*/,
                                          fawkes::response& /*resp*/) const {
-        esl::ignore_unused(this);
+        boost::ignore_unused(this);
         ++(*pre_cnt);
         return fawkes::middleware_result::proceed;
     }
 
     fawkes::middleware_result post_handle(fawkes::request& /*req*/,
                                           fawkes::response& /*resp*/) const {
-        esl::ignore_unused(this);
+        boost::ignore_unused(this);
         ++(*post_cnt);
         return fawkes::middleware_result::proceed;
     }

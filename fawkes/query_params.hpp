@@ -12,9 +12,9 @@
 #include <type_traits>
 #include <utility>
 
+#include <boost/core/ignore_unused.hpp>
 #include <boost/url/params_ref.hpp>
 #include <boost/url/params_view.hpp>
-#include <esl/ignore_unused.h>
 
 namespace fawkes {
 
@@ -74,7 +74,7 @@ public:
     // that match `key` are erased.
     // Key comparison is case-sensitive.
     void set(std::string_view key, std::string_view value) {
-        esl::ignore_unused(impl_.set(key, value));
+        boost::ignore_unused(impl_.set(key, value));
     }
 
     // Remove all matched elements, and returns the number of elements removed.
