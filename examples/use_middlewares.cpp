@@ -13,8 +13,8 @@
 #include <boost/asio/steady_timer.hpp>
 #include <boost/beast/http/status.hpp>
 #include <boost/beast/http/verb.hpp>
+#include <boost/core/ignore_unused.hpp>
 #include <boost/url.hpp>
-#include <esl/ignore_unused.h>
 #include <fmt/chrono.h>
 #include <fmt/format.h>
 #include <gflags/gflags.h>
@@ -103,7 +103,7 @@ int main(int argc, char* argv[]) {
                    fawkes::middlewares::use(tracking_id{}),
                    [](const fawkes::request& req, fawkes::response& resp)
                        -> asio::awaitable<void> {
-                       esl::ignore_unused(req);
+                       boost::ignore_unused(req);
                        auto tp = std::chrono::system_clock::now();
                        resp.text(http::status::ok, fmt::format("{}", tp));
                        co_return;
@@ -113,7 +113,7 @@ int main(int argc, char* argv[]) {
                    fawkes::middlewares::use(coro_delayed{}),
                    [](const fawkes::request& req, fawkes::response& resp)
                        -> asio::awaitable<void> {
-                       esl::ignore_unused(req);
+                       boost::ignore_unused(req);
                        resp.text(http::status::ok, std::string{"Pong after 1s delay"});
                        co_return;
                    });
@@ -123,7 +123,7 @@ int main(int argc, char* argv[]) {
         svc.do_get("/simple",
                    [](const fawkes::request& req, fawkes::response& resp)
                        -> asio::awaitable<void> {
-                       esl::ignore_unused(req);
+                       boost::ignore_unused(req);
                        resp.text(http::status::ok, std::string{"response for simple request"});
                        co_return;
                    });

@@ -14,6 +14,7 @@ target_sources(ping_pong_svc
 
 target_link_libraries(ping_pong_svc
   PRIVATE
+    Boost::core
     fawkes::fawkes
     gflags::gflags
     spdlog::spdlog
@@ -45,6 +46,7 @@ target_sources(use_middlewares
 
 target_link_libraries(use_middlewares
   PRIVATE
+    Boost::core
     esl::esl
     fawkes::fawkes
     gflags::gflags
@@ -141,6 +143,7 @@ target_sources(graceful_shutdown
 
 target_link_libraries(graceful_shutdown
   PRIVATE
+    Boost::core
     fawkes::fawkes
     fmt::fmt
     gflags::gflags

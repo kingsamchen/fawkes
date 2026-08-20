@@ -531,7 +531,7 @@ TEST_CASE("Locate non-wild path") {
         if (handler) {
             fawkes::request fake_req;
             fawkes::response fake_resp;
-            esl::ignore_unused((*handler)(fake_req, fake_resp));
+            boost::ignore_unused((*handler)(fake_req, fake_resp));
             CHECK_EQ(handler_path, req.test_path);
         }
     }
@@ -612,7 +612,7 @@ TEST_CASE("Locate wildcard path") {
         if (handler) {
             fawkes::request fake_req;
             fawkes::response fake_resp;
-            esl::ignore_unused((*handler)(fake_req, fake_resp));
+            boost::ignore_unused((*handler)(fake_req, fake_resp));
             CHECK_EQ(handler_path, req.hit_route);
         }
     }

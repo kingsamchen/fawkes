@@ -10,7 +10,7 @@
 #include <boost/asio/steady_timer.hpp>
 #include <boost/asio/this_coro.hpp>
 #include <boost/beast/http/status.hpp>
-#include <esl/ignore_unused.h>
+#include <boost/core/ignore_unused.hpp>
 #include <gflags/gflags.h>
 #include <spdlog/cfg/env.h>
 #include <spdlog/spdlog.h>
@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
         svc.do_get("/delayed",
                    [](const fawkes::request& req, fawkes::response& resp)
                        -> asio::awaitable<void> {
-                       esl::ignore_unused(req);
+                       boost::ignore_unused(req);
                        SPDLOG_INFO("wait for a moment...");
 
                        asio::steady_timer timer(co_await asio::this_coro::executor);

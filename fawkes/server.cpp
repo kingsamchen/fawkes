@@ -31,10 +31,10 @@
 #include <boost/beast/http/string_body.hpp>
 #include <boost/beast/http/write.hpp>
 #include <boost/beast/version.hpp>
+#include <boost/core/ignore_unused.hpp>
 #include <boost/json/object.hpp>
 #include <boost/json/serialize.hpp>
 #include <boost/system/system_error.hpp>
-#include <esl/ignore_unused.h>
 #include <fmt/ostream.h>
 #include <spdlog/spdlog.h>
 
@@ -239,7 +239,7 @@ asio::awaitable<http::message_generator> server::handle_request(
             const json::object body{
                 {"error", json::object{{"message", "Unknown resource"}}}};
             fwk_resp.json(http::status::not_found, json::serialize(body));
-            esl::ignore_unused(co_await router_.run_post_handle(fwk_req, fwk_resp));
+            boost::ignore_unused(co_await router_.run_post_handle(fwk_req, fwk_resp));
             co_return prepare_response(fwk_resp);
         }
 
@@ -250,7 +250,7 @@ asio::awaitable<http::message_generator> server::handle_request(
             co_return prepare_response(fwk_resp);
         }
 
-        esl::ignore_unused(co_await router_.run_post_handle(fwk_req, fwk_resp));
+        boost::ignore_unused(co_await router_.run_post_handle(fwk_req, fwk_resp));
 
         co_return prepare_response(fwk_resp);
     } catch (const std::exception& ex) {
