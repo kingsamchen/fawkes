@@ -44,6 +44,8 @@ function(fawkes_common_compile_configs TARGET)
         # supress
         -Wno-error=deprecated
         -Wno-unused-function
+
+        $<$<CXX_COMPILER_ID:GNU>:-Wno-maybe-uninitialized>
     )
   else()
     target_compile_definitions(${TARGET}
