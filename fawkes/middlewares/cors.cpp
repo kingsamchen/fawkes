@@ -9,10 +9,10 @@
 #include <utility>
 #include <variant>
 
+#include <absl/strings/str_join.h>
 #include <boost/beast/http/field.hpp>
 #include <boost/beast/http/status.hpp>
 #include <boost/beast/http/verb.hpp>
-#include <esl/strings.h>
 #include <spdlog/spdlog.h>
 
 #include "fawkes/middleware.hpp"
@@ -96,20 +96,20 @@ auto cors::generate_preflight_headers(const options& opts) -> http_header {
     }
 
     if (!opts.allow_methods.empty()) {
-        auto methods = esl::strings::join(opts.allow_methods,
-                                          ", ",
-                                          [](http::verb verb, std::string& out) {
-                                              out.append(http::to_string(verb));
-                                          });
+        auto methods = absl::StrJoin(opts.allow_methods,
+                                     ", ",
+                                     [](std::string* out, http::verb verb) {
+                                         out->append(http::to_string(verb));
+                                     });
         hdrs[hdr_allow_methods].push_back(std::move(methods));
     }
 
     if (!opts.allow_headers.empty()) {
-        auto headers = esl::strings::join(opts.allow_headers,
-                                          ", ",
-                                          [](http::field field, std::string& out) {
-                                              out.append(http::to_string(field));
-                                          });
+        auto headers = absl::StrJoin(opts.allow_headers,
+                                     ", ",
+                                     [](std::string* out, http::field field) {
+                                         out->append(http::to_string(field));
+                                     });
         hdrs[hdr_allow_headers].push_back(std::move(headers));
     }
 
@@ -142,11 +142,11 @@ auto cors::generate_cors_headers(const options& opts) -> http_header {
     }
 
     if (!opts.expose_headers.empty()) {
-        auto headers = esl::strings::join(opts.expose_headers,
-                                          ", ",
-                                          [](http::field field, std::string& out) {
-                                              out.append(http::to_string(field));
-                                          });
+        auto headers = absl::StrJoin(opts.expose_headers,
+                                     ", ",
+                                     [](std::string* out, http::field field) {
+                                         out->append(http::to_string(field));
+                                     });
         hdrs[hdr_expose_headers].push_back(std::move(headers));
     }
 

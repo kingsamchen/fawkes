@@ -12,6 +12,8 @@
 #include <string_view>
 #include <utility>
 
+#include <absl/strings/str_split.h>
+
 #include "fawkes/path_params.hpp"
 
 namespace fawkes {
@@ -106,7 +108,7 @@ void node::insert_route(std::string_view path, std::string_view full_path,
 
         // Wildcard conflict.
         const auto segment = child.type_ != type::catch_all
-                                 ? *esl::strings::split(path, '/').begin()
+                                 ? *absl::StrSplit(path, '/').begin()
                                  : path;
         std::string prefix{full_path.substr(0, full_path.find(segment))};
         prefix += child.path_;
