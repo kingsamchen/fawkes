@@ -46,6 +46,7 @@ target_link_libraries(fawkes
     spdlog::spdlog
 
   PUBLIC
+    absl::overload
     Boost::asio
     Boost::beast
     Boost::core
