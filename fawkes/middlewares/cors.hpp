@@ -14,13 +14,13 @@
 #include <variant>
 #include <vector>
 
+#include <absl/functional/overload.h>
 #include <boost/beast/http/field.hpp>
 #include <boost/beast/http/verb.hpp>
 #include <boost/container/flat_map.hpp>
 #include <boost/container/static_vector.hpp>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/unordered/unordered_flat_set.hpp>
-#include <esl/utility.h>
 
 #include "fawkes/middleware.hpp"
 #include "fawkes/request.hpp"
@@ -93,7 +93,7 @@ private:
 
     [[nodiscard]] bool is_origin_allowed(std::string_view origin) const {
         return std::visit(
-            esl::overloaded{
+            absl::Overload{
                 [](allow_origin_all) -> bool {
                     return true;
                 },
