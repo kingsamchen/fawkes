@@ -9,14 +9,8 @@
         "boost-json",
         "boost-url",
         "doctest",
-        "esl",
         "fmt",
         "gflags",
         "spdlog"
-    ],
-    "vcpkg-configuration": {
-        "overlay-ports": [
-            "./build/vcpkg-overlay"
-        ]
-    }
+    ]
 }

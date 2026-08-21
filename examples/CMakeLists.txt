@@ -47,7 +47,6 @@ target_sources(use_middlewares
 target_link_libraries(use_middlewares
   PRIVATE
     Boost::core
-    esl::esl
     fawkes::fawkes
     gflags::gflags
     spdlog::spdlog
