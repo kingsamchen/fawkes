@@ -40,6 +40,7 @@ target_include_directories(fawkes
 
 target_link_libraries(fawkes
   PRIVATE
+    absl::strings
     esl::esl
     fmt::fmt
     spdlog::spdlog

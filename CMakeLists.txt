@@ -61,6 +61,7 @@ include(${FAWKES_CMAKE_DIR}/clang_tidy.cmake)
 include(${FAWKES_CMAKE_DIR}/sanitizer.cmake)
 include(${FAWKES_CMAKE_DIR}/utils.cmake)
 
+find_package(absl CONFIG REQUIRED)
 find_package(Boost CONFIG REQUIRED COMPONENTS asio)
 find_package(Boost CONFIG REQUIRED COMPONENTS beast)
 find_package(Boost CONFIG REQUIRED COMPONENTS core)

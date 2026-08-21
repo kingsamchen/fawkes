@@ -9,13 +9,14 @@
 #include <string_view>
 #include <vector>
 
+#include <absl/strings/ascii.h>
+#include <absl/strings/str_split.h>
 #include <boost/url/authority_view.hpp>
 #include <boost/url/decode_view.hpp>
 #include <boost/url/encode.hpp>
 #include <boost/url/grammar.hpp>
 #include <boost/url/rfc/pct_encoded_rule.hpp>
 #include <boost/url/rfc/unreserved_chars.hpp>
-#include <esl/strings.h>
 #include <fmt/chrono.h>
 #include <spdlog/spdlog.h>
 
@@ -24,8 +25,6 @@ namespace fawkes {
 namespace urls = boost::urls;
 
 namespace {
-
-constexpr std::string_view ascii_space = " \t\r\n";
 
 // token = 1*tchar
 // tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." /
@@ -58,11 +57,10 @@ bool valid_expires(std::chrono::sys_seconds expires) noexcept {
 void cookie_view::parse_cookie_value(std::string_view cookie_value) {
     static constexpr std::string_view empty_value;
 
-    auto pairs = esl::strings::split(cookie_value, ';', esl::strings::skip_empty{});
+    auto pairs = absl::StrSplit(cookie_value, ';', absl::SkipEmpty{});
     for (auto p : pairs) {
-        const auto trimmed = esl::strings::trim(p, ascii_space);
-        auto fields = esl::strings::split(trimmed, '=')
-                          .to<std::vector<std::string_view>>();
+        const auto trimmed = absl::StripAsciiWhitespace(p);
+        std::vector<std::string_view> fields = absl::StrSplit(trimmed, '=');
         // Must be `key=value`, while the `value` is allowed to be empty but the `name` can't
         // be empty.
         if (fields.size() > 2 || fields.empty() || fields[0].empty()) {
