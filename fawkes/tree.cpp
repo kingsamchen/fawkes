@@ -52,7 +52,7 @@ const route_handler_t* node::locate(std::string_view path, path_params& ps) cons
             return &child.handler_;
         } else [[unlikely]] {
             throw std::runtime_error(fmt::format("node type '{}' of route '{}' is invalid",
-                                                 esl::to_underlying(child.type_), child.path_));
+                                                 std::to_underlying(child.type_), child.path_));
         }
     }
 
