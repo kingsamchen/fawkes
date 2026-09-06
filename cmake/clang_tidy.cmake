@@ -21,6 +21,7 @@ function(fawkes_clang_tidy_on_build TARGET)
         VS_GLOBAL_RunCodeAnalysis true
         VS_GLOBAL_EnableClangTidyCodeAnalysis true
         VS_GLOBAL_EnableMicrosoftCodeAnalysis false
+        VS_GLOBAL_ClangTidyChecks "-clang-analyzer-*,-clang-diagnostic-*"
     )
   else()
     set(CLANG_TIDY_COMMAND

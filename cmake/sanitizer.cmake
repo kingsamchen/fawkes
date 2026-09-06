@@ -23,7 +23,19 @@ if(FAWKES_USE_SANITIZERS)
       endif()
     endforeach()
   else()
-    list(APPEND FAWKES_SANITIZER_COMPILE_FLAGS "-fno-omit-frame-pointer")
+    list(APPEND FAWKES_SANITIZER_COMPILE_FLAGS
+      "-fno-omit-frame-pointer"
+      "-fno-optimize-sibling-calls"
+    )
+
+    # GCC's control flow analysis has false positives against sanitizers.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+      list(APPEND FAWKES_SANITIZER_COMPILE_FLAGS
+        "-Wno-maybe-uninitialized"
+        "-Wno-stringop-overflow"
+        "$<$<COMPILE_LANGUAGE:CXX>:-Wno-mismatched-new-delete>"
+      )
+    endif()
 
     foreach(SANITIZER_ORIG IN LISTS FAWKES_USE_SANITIZERS)
       string(TOUPPER "${SANITIZER_ORIG}" SANITIZER)
@@ -59,3 +71,38 @@ function(fawkes_use_sanitizers TARGET)
       ${FAWKES_SANITIZER_LINK_FLAGS}
   )
 endfunction()
+
+# Add CMAKE_BUILD_TYPE=Sanitizer
+if(CMAKE_BUILD_TYPE STREQUAL "Sanitizer")
+  set(_FAWKES_SANITIZER_BUILD_FLAGS "-O1 -g -DNDEBUG")
+
+  if(NOT CMAKE_C_FLAGS_SANITIZER)
+    set(CMAKE_C_FLAGS_SANITIZER "${_FAWKES_SANITIZER_BUILD_FLAGS}"
+      CACHE STRING "C flags for Sanitizer build type" FORCE
+    )
+  endif()
+
+  if(NOT CMAKE_CXX_FLAGS_SANITIZER)
+    set(CMAKE_CXX_FLAGS_SANITIZER "${_FAWKES_SANITIZER_BUILD_FLAGS}"
+      CACHE STRING "C++ flags for Sanitizer build type" FORCE
+    )
+  endif()
+
+  if(NOT CMAKE_EXE_LINKER_FLAGS_SANITIZER)
+    set(CMAKE_EXE_LINKER_FLAGS_SANITIZER "${CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO}"
+      CACHE STRING "EXE linker flags for Sanitizer build type" FORCE
+    )
+  endif()
+
+  if(NOT CMAKE_SHARED_LINKER_FLAGS_SANITIZER)
+    set(CMAKE_SHARED_LINKER_FLAGS_SANITIZER "${CMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO}"
+      CACHE STRING "SHARED linker flags for Sanitizer build type" FORCE
+    )
+  endif()
+
+  if(NOT CMAKE_MODULE_LINKER_FLAGS_SANITIZER)
+    set(CMAKE_MODULE_LINKER_FLAGS_SANITIZER "${CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO}"
+      CACHE STRING "MODULE linker flags for Sanitizer build type" FORCE
+    )
+  endif()
+endif()
