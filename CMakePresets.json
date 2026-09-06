@@ -14,10 +14,11 @@
             "binaryDir": "${sourceDir}/out/${presetName}",
             "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
             "cacheVariables": {
+                "BUILD_TESTING": "OFF",
                 "CMAKE_BUILD_TYPE": "Release",
-                "FAWKES_USE_SANITIZERS": "",
+                "FAWKES_BUILD_EXAMPLES": "OFF",
                 "FAWKES_CLANG_TIDY_ON_BUILD": "OFF",
-                "FAWKES_BUILD_EXAMPLES": "OFF"
+                "FAWKES_USE_SANITIZERS": ""
             },
             "condition": {
                 "type": "equals",
@@ -29,10 +30,12 @@
             "name": "linux-ci",
             "inherits": "linux-release",
             "displayName": "Linux CI Pipeline",
-            "description": "CI pipeline build on Linux",
+            "description": "CI pipeline build with sanitizers on Linux",
             "cacheVariables": {
-                "FAWKES_USE_SANITIZERS": "ASAN;UBSAN",
-                "FAWKES_BUILD_EXAMPLES": "ON"
+                "BUILD_TESTING": "ON",
+                "CMAKE_BUILD_TYPE": "Sanitizer",
+                "FAWKES_BUILD_EXAMPLES": "ON",
+                "FAWKES_USE_SANITIZERS": "ASAN;UBSAN"
             }
         },
         {
@@ -41,9 +44,10 @@
             "displayName": "Linux Dev",
             "description": "Dev build on Linux",
             "cacheVariables": {
+                "BUILD_TESTING": "ON",
                 "CMAKE_BUILD_TYPE": "Debug",
-                "FAWKES_USE_SANITIZERS": "ASAN;UBSAN",
-                "FAWKES_BUILD_EXAMPLES": "ON"
+                "FAWKES_BUILD_EXAMPLES": "ON",
+                "FAWKES_USE_SANITIZERS": "ASAN;UBSAN"
             }
         },
         {
@@ -53,10 +57,11 @@
             "binaryDir": "${sourceDir}/out/${presetName}",
             "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
             "cacheVariables": {
+                "BUILD_TESTING": "OFF",
                 "CMAKE_CONFIGURATION_TYPES": "Release",
-                "FAWKES_USE_SANITIZERS": "",
+                "FAWKES_BUILD_EXAMPLES": "OFF",
                 "FAWKES_CLANG_TIDY_ON_BUILD": "OFF",
-                "FAWKES_BUILD_EXAMPLES": "OFF"
+                "FAWKES_USE_SANITIZERS": ""
             },
             "condition": {
                 "type": "equals",
@@ -68,12 +73,12 @@
             "name": "windows-ci",
             "inherits": "windows-release",
             "displayName": "Windows CI Pipeline",
-            "description": "CI pipeline build on Windows",
+            "description": "CI pipeline build with sanitizers on Windows",
             "cacheVariables": {
+                "BUILD_TESTING": "ON",
                 "CMAKE_CONFIGURATION_TYPES": "Release",
-                "FAWKES_USE_SANITIZERS": "ASAN",
-                "FAWKES_CLANG_TIDY_ON_BUILD": "ON",
-                "FAWKES_BUILD_EXAMPLES": "ON"
+                "FAWKES_BUILD_EXAMPLES": "ON",
+                "FAWKES_USE_SANITIZERS": "ASAN"
             }
         },
         {
@@ -82,10 +87,10 @@
             "displayName": "Windows Dev",
             "description": "Dev build on Windows",
             "cacheVariables": {
+                "BUILD_TESTING": "ON",
                 "CMAKE_CONFIGURATION_TYPES": "Debug",
-                "FAWKES_USE_SANITIZERS": "ASAN",
-                "FAWKES_CLANG_TIDY_ON_BUILD": "OFF",
-                "FAWKES_BUILD_EXAMPLES": "ON"
+                "FAWKES_BUILD_EXAMPLES": "ON",
+                "FAWKES_USE_SANITIZERS": "ASAN"
             }
         }
     ],

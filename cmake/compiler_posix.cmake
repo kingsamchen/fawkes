@@ -29,23 +29,28 @@ function(fawkes_common_compile_configs TARGET)
         -Wextra
         -Wpedantic
 
-        # enhanced
+        # Enhanced
         -Wconversion
         -Wdouble-promotion
         -Wimplicit-fallthrough
         -Wnon-virtual-dtor
-        -Wnull-dereference
         -Wold-style-cast
         -Woverloaded-virtual
         -Wpointer-arith
-        -Wshadow
         -Wsign-conversion
 
-        # supress
+        $<$<CXX_COMPILER_ID:GNU>:
+          -Wshadow=local
+        >
+
+        # Supressed
         -Wno-error=deprecated
+        -Wno-missing-field-initializers
         -Wno-unused-function
 
-        $<$<CXX_COMPILER_ID:GNU>:-Wno-maybe-uninitialized>
+        $<$<CXX_COMPILER_ID:GNU>:
+          -Wno-maybe-uninitialized
+        >
     )
   else()
     target_compile_definitions(${TARGET}

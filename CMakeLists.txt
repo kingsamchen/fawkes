@@ -56,40 +56,10 @@ if(MSVC)
 else()
   include(${FAWKES_CMAKE_DIR}/compiler_posix.cmake)
 endif()
-
-include(${FAWKES_CMAKE_DIR}/clang_tidy.cmake)
 include(${FAWKES_CMAKE_DIR}/sanitizer.cmake)
+include(${FAWKES_CMAKE_DIR}/dependencies.cmake)
 include(${FAWKES_CMAKE_DIR}/utils.cmake)
-
-find_package(absl CONFIG REQUIRED)
-find_package(Boost CONFIG REQUIRED COMPONENTS asio)
-find_package(Boost CONFIG REQUIRED COMPONENTS beast)
-find_package(Boost CONFIG REQUIRED COMPONENTS core)
-find_package(Boost CONFIG REQUIRED COMPONENTS json)
-find_package(Boost CONFIG REQUIRED COMPONENTS url)
-find_package(doctest CONFIG REQUIRED)
-find_package(fmt CONFIG REQUIRED)
-find_package(spdlog CONFIG REQUIRED)
-find_package(Threads REQUIRED)
-
-target_compile_definitions(Boost::asio
-  INTERFACE
-    $<$<BOOL:${WIN32}>:_WIN32_WINNT=0x0601>
-
-    BOOST_ASIO_NO_DEPRECATED=1
-)
-
-# Fix gcc-13 regression.
-target_compile_options(Boost::json
-  INTERFACE
-    $<$<CXX_COMPILER_ID:GNU>:-Wno-stringop-overflow>
-)
-
-target_compile_definitions(spdlog::spdlog
-  INTERFACE
-    SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG
-)
-
+include(${FAWKES_CMAKE_DIR}/clang_tidy.cmake)
 include(${FAWKES_CMAKE_DIR}/pch.cmake)
 
 if(BUILD_TESTING)

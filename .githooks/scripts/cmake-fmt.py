@@ -8,7 +8,7 @@ Usage:
 
 from __future__ import annotations
 
-__version__ = "0.1.20260502"
+__version__ = "0.1.20260912"
 
 import argparse
 import sys
@@ -314,6 +314,8 @@ BLOCK_CLOSERS = frozenset(
 )
 BLOCK_MID = frozenset({"elseif", "else"})
 
+CONDITION_COMMANDS = frozenset({"if", "elseif"})
+
 TARGET_COMMANDS = frozenset(
     {
         "target_sources",
@@ -420,6 +422,14 @@ class CMakeFormatter:
 
         parsed_lines = _parse_raw_arg_lines(cmd.raw_args)
         first_on_own_line = cmd.raw_args.lstrip(" \t").startswith("\n")
+        close_on_last_arg = name in CONDITION_COMMANDS
+
+        if close_on_last_arg:
+            for idx in range(len(parsed_lines) - 1, -1, -1):
+                args_str, cmt = parsed_lines[idx]
+                if args_str:
+                    parsed_lines[idx] = (f"{args_str})", cmt)
+                    break
 
         if first_on_own_line:
             lines: list[str] = [f"{base}{name}("]
@@ -441,7 +451,8 @@ class CMakeFormatter:
                 lines.append(f"{base}{i1}{args_str}")
             else:
                 lines.append(f"{base}{i1}{cmt}")
-        lines.append(f"{base})")
+        if not close_on_last_arg:
+            lines.append(f"{base})")
         result = "\n".join(lines)
         if cmd.trailing_comment:
             result += f" {cmd.trailing_comment}"
