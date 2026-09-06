@@ -23,7 +23,18 @@ if(FAWKES_USE_SANITIZERS)
       endif()
     endforeach()
   else()
-    list(APPEND FAWKES_SANITIZER_COMPILE_FLAGS "-fno-omit-frame-pointer")
+    list(APPEND FAWKES_SANITIZER_COMPILE_FLAGS
+      "-fno-omit-frame-pointer"
+      "-fno-optimize-sibling-calls"
+    )
+
+    # gcc-15's control flow analysis has false positives against sanitizers.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+      list(APPEND FAWKES_SANITIZER_COMPILE_FLAGS
+        "-Wno-maybe-uninitialized"
+        "$<$<COMPILE_LANGUAGE:CXX>:-Wno-mismatched-new-delete>"
+      )
+    endif()
 
     foreach(SANITIZER_ORIG IN LISTS FAWKES_USE_SANITIZERS)
       string(TOUPPER "${SANITIZER_ORIG}" SANITIZER)

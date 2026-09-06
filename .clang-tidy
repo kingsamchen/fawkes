@@ -1,8 +1,9 @@
 ---
 Checks: >
   -*,
-  clang-diagnostic-*,
   bugprone-*,
+  clang-analyzer-*,
+  clang-diagnostic-*,
   cppcoreguidelines-*,
   google-*,
   misc-*,
@@ -11,6 +12,11 @@ Checks: >
   portability-*,
   readability-*,
   -bugprone-easily-swappable-parameters,
+  -clang-analyzer-core.CallAndMessage,
+  -clang-analyzer-core.StackAddressEscape,
+  -clang-analyzer-core.UndefinedBinaryOperatorResult,
+  -clang-analyzer-cplusplus.NewDeleteLeaks,
+  -clang-analyzer-optin.core.EnumCastOutOfRange,
   -cppcoreguidelines-avoid-c-arrays,
   -cppcoreguidelines-avoid-do-while,
   -cppcoreguidelines-avoid-magic-numbers,
@@ -28,6 +34,8 @@ Checks: >
   -modernize-return-braced-init-list,
   -modernize-use-trailing-return-type,
   -portability-avoid-pragma-once,
+  -readability-ambiguous-smartptr-reset-call,
+  -readability-convert-member-functions-to-static,
   -readability-function-cognitive-complexity,
   -readability-identifier-length,
 
@@ -45,12 +53,24 @@ CheckOptions:
     value: 0;1;2;3;4;5;6;7;8;9;10;15;16;30;32;42;64;100;127;128;255;256;511;512;1000;1023;1024
   - key: cppcoreguidelines-macro-usage.CheckCapsOnly
     value: 1
+  - key: cppcoreguidelines-rvalue-reference-param-not-moved.AllowImplicitMove
+    value: true
+  - key: cppcoreguidelines-rvalue-reference-param-not-moved.AllowPartialMove
+    value: true
   - key: cppcoreguidelines-rvalue-reference-param-not-moved.IgnoreNonDeducedTemplateTypes
     value: 1
+  - key: cppcoreguidelines-special-member-functions.AllowImplicitlyDeletedCopyOrMove
+    value: true
+  - key: cppcoreguidelines-special-member-functions.AllowMissingMoveFunctionsWhenCopyIsDeleted
+    value: true
+  - key: misc-use-internal-linkage.FixMode
+    value: None
   - key: misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
     value: 1
   - key: modernize-avoid-bind.PermissiveParameterList
     value: 1
+  - key: modernize-pass-by-value.ValuesOnly
+    value: true
   - key: performance-unnecessary-value-param.AllowedTypes
     value: exception_ptr;iterator$;
   - key: readability-implicit-bool-conversion.AllowIntegerConditions
@@ -61,4 +81,6 @@ CheckOptions:
     value: 1
   - key: readability-magic-numbers.IgnoredIntegerValues
     value: 0;1;2;3;4;5;6;7;8;9;10;15;16;30;32;42;64;100;127;128;255;256;511;512;1000;1023;1024
+  - key: readability-qualified-auto.AddConstToQualified
+    value: false
 ...
