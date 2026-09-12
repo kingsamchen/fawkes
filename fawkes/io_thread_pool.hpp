@@ -13,6 +13,7 @@
 
 #include <boost/asio/executor_work_guard.hpp>
 #include <boost/asio/io_context.hpp>
+#include <spdlog/spdlog.h>
 
 namespace fawkes {
 
@@ -53,8 +54,14 @@ public:
     // Stops the pool as soon as possible.
     // Pending tasks would not be handled.
     void stop() {
-        for (auto& ctx : pool_) {
-            ctx.io_ctx_ptr->stop();
+        try {
+            for (auto& ctx : pool_) {
+                ctx.io_ctx_ptr->stop();
+            }
+        } catch (const std::exception& ex) {
+            SPDLOG_ERROR("Unhandled exception during stop of io_thread_pool; what={}", ex.what());
+        } catch (...) {
+            SPDLOG_ERROR("Unknown exception during stop of io_thread_pool");
         }
     }
 
