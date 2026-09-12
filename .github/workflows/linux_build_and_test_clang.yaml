@@ -54,9 +54,33 @@ jobs:
           sudo apt install -y ninja-build
           sudo pip3 install cmake
 
-      - name: Build and test
+      - name: Setup vcpkg binary cache
+        id: vcpkg-cache
+        uses: ./.github/actions/setup-vcpkg-cache
+        with:
+          c-compiler: ${{matrix.cc}}
+          cxx-compiler: ${{matrix.cxx}}
+          target-triplet: x64-linux
+
+      - name: Configure
+        id: vcpkg-configure
         env:
           CC: ${{matrix.cc}}
           CXX: ${{matrix.cxx}}
         run: |
-          cmake --workflow --preset linux-ci
+          cmake --preset linux-ci
+
+      - name: Save vcpkg binary packages
+        if: steps.vcpkg-configure.outcome == 'success' && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+
+      - name: Build
+        run: |
+          cmake --build --preset linux-ci
+
+      - name: Test
+        run: |
+          ctest --preset linux-ci

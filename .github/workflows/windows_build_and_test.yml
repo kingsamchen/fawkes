@@ -37,8 +37,34 @@ jobs:
         with:
           arch: x64
 
-      - name: Build and test
+      - name: Setup vcpkg binary cache
+        id: vcpkg-cache
+        uses: ./.github/actions/setup-vcpkg-cache
+        env:
+          VCPKG_ROOT: "C:\\vcpkg"
+        with:
+          c-compiler: cl
+          cxx-compiler: cl
+          target-triplet: x64-windows
+
+      - name: Configure
+        id: vcpkg-configure
         env:
           VCPKG_ROOT: "C:\\vcpkg"
         run: |
-          cmake --workflow --preset windows-ci
+          cmake --preset windows-ci
+
+      - name: Save vcpkg binary packages
+        if: steps.vcpkg-configure.outcome == 'success' && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+
+      - name: Build
+        run: |
+          cmake --build --preset windows-ci
+
+      - name: Test
+        run: |
+          ctest --preset windows-ci
