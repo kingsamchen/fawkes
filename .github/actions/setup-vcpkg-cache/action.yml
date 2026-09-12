@@ -1,0 +1,130 @@
+name: Setup vcpkg binary cache
+description: Restore and save vcpkg binary packages with the GitHub Actions cache
+
+inputs:
+  c-compiler:
+    description: C compiler command used by vcpkg
+    required: true
+  cxx-compiler:
+    description: C++ compiler command used by vcpkg
+    required: true
+  target-triplet:
+    description: vcpkg target triplet
+    required: true
+
+outputs:
+  cache-hit:
+    description: Whether the primary vcpkg cache key was restored
+    value: ${{ steps.cache.outputs.cache-hit }}
+  cache-primary-key:
+    description: Primary key used to restore and save the vcpkg cache
+    value: ${{ steps.cache.outputs.cache-primary-key }}
+
+runs:
+  using: composite
+  steps:
+    - name: Calculate vcpkg ABI environment fingerprint (Linux)
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        VCPKG_CACHE_C_COMPILER: ${{ inputs.c-compiler }}
+        VCPKG_CACHE_CXX_COMPILER: ${{ inputs.cxx-compiler }}
+      run: |
+        vcpkg_root="${VCPKG_ROOT:-${VCPKG_INSTALLATION_ROOT:-}}"
+        if [[ -z "${vcpkg_root}" ]]; then
+          echo "VCPKG_ROOT or VCPKG_INSTALLATION_ROOT must be set" >&2
+          exit 1
+        fi
+
+        binary_cache="${RUNNER_TEMP}/vcpkg-binary-cache"
+        vcpkg_executable="${vcpkg_root}/vcpkg"
+        mkdir -p "${binary_cache}"
+
+        c_compiler="$(command -v "${VCPKG_CACHE_C_COMPILER}")"
+        cxx_compiler="$(command -v "${VCPKG_CACHE_CXX_COMPILER}")"
+        vcpkg_version="$("${vcpkg_executable}" version | head -n 1)"
+        vcpkg_revision="$(git -C "${vcpkg_root}" rev-parse HEAD 2>/dev/null || true)"
+        c_compiler_hash="$(git hash-object "${c_compiler}")"
+        cxx_compiler_hash="$(git hash-object "${cxx_compiler}")"
+        cmake_version="$(cmake --version | head -n 1)"
+
+        fingerprint="$({
+          printf '%s\n' "${vcpkg_version}"
+          printf '%s\n' "${vcpkg_revision}"
+          printf '%s\n' "${c_compiler_hash}"
+          printf '%s\n' "${cxx_compiler_hash}"
+          printf '%s\n' "${cmake_version}"
+        } | git hash-object --stdin)"
+
+        echo "VCPKG_CACHE_FINGERPRINT=${fingerprint}" >> "${GITHUB_ENV}"
+        echo "VCPKG_DEFAULT_BINARY_CACHE=${binary_cache}" >> "${GITHUB_ENV}"
+
+    - name: Calculate vcpkg ABI environment fingerprint (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        VCPKG_CACHE_C_COMPILER: ${{ inputs.c-compiler }}
+        VCPKG_CACHE_CXX_COMPILER: ${{ inputs.cxx-compiler }}
+      run: |
+        $vcpkgRoot = if ($env:VCPKG_ROOT) {
+          $env:VCPKG_ROOT
+        } else {
+          $env:VCPKG_INSTALLATION_ROOT
+        }
+        if ([string]::IsNullOrWhiteSpace($vcpkgRoot)) {
+          throw "VCPKG_ROOT or VCPKG_INSTALLATION_ROOT must be set"
+        }
+
+        $binaryCache = Join-Path $env:RUNNER_TEMP "vcpkg-binary-cache"
+        New-Item -ItemType Directory -Force -Path $binaryCache | Out-Null
+
+        $vcpkgExecutable = Join-Path $vcpkgRoot "vcpkg.exe"
+        $cCompiler = (Get-Command $env:VCPKG_CACHE_C_COMPILER -CommandType Application -ErrorAction Stop).Source
+        $cxxCompiler = (Get-Command $env:VCPKG_CACHE_CXX_COMPILER -CommandType Application -ErrorAction Stop).Source
+        $vcpkgVersion = (& $vcpkgExecutable version | Select-Object -First 1)
+        $vcpkgRevision = (& git -C $vcpkgRoot rev-parse HEAD 2>$null)
+        if ($LASTEXITCODE -ne 0) {
+          $vcpkgRevision = ""
+        }
+        $cCompilerHash = (Get-FileHash -Algorithm SHA256 $cCompiler).Hash.ToLowerInvariant()
+        $cxxCompilerHash = (Get-FileHash -Algorithm SHA256 $cxxCompiler).Hash.ToLowerInvariant()
+        $cmakeVersion = (& cmake --version | Select-Object -First 1)
+        $powershellVersion = $PSVersionTable.PSVersion.ToString()
+
+        $payload = (@(
+          $vcpkgVersion
+          $vcpkgRevision
+          $cCompilerHash
+          $cxxCompilerHash
+          $cmakeVersion
+          $powershellVersion
+        ) -join "`n") + "`n"
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+          $hashBytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($payload))
+        } finally {
+          $sha256.Dispose()
+        }
+        $fingerprint = -join ($hashBytes | ForEach-Object { $_.ToString("x2") })
+
+        "VCPKG_CACHE_FINGERPRINT=$fingerprint" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "VCPKG_DEFAULT_BINARY_CACHE=$binaryCache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+    - name: Export vcpkg ABI environment fingerprint
+      id: fingerprint
+      shell: bash
+      run: |
+        if [[ -z "${VCPKG_CACHE_FINGERPRINT:-}" ]]; then
+          echo "VCPKG cache fingerprint was not calculated" >&2
+          exit 1
+        fi
+        echo "value=${VCPKG_CACHE_FINGERPRINT}" >> "${GITHUB_OUTPUT}"
+
+    - name: Restore vcpkg binary packages
+      id: cache
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.temp }}/vcpkg-binary-cache
+        key: vcpkg-v2-${{ runner.os }}-${{ inputs.target-triplet }}-${{ inputs.cxx-compiler }}-${{ steps.fingerprint.outputs.value }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'triplets/**', 'ports/**') }}
+        restore-keys: |
+          vcpkg-v2-${{ runner.os }}-${{ inputs.target-triplet }}-${{ inputs.cxx-compiler }}-${{ steps.fingerprint.outputs.value }}-

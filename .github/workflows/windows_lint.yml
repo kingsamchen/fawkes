@@ -37,6 +37,15 @@ jobs:
         with:
           arch: x64
 
+      - name: Setup vcpkg binary cache
+        uses: ./.github/actions/setup-vcpkg-cache
+        env:
+          VCPKG_ROOT: "C:\\vcpkg"
+        with:
+          c-compiler: cl
+          cxx-compiler: cl
+          target-triplet: x64-windows
+
       - name: Run clang-tidy on build
         env:
           VCPKG_ROOT: "C:\\vcpkg"
