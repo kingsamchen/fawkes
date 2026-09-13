@@ -92,7 +92,7 @@ struct locate_request {
                    std::string_view route,
                    std::initializer_list<fawkes::detail::param> ps)
         : test_path(test), handler_found(found), hit_route(route) {
-        for (auto par : ps) {
+        for (const auto& par : ps) {
             params.add(par.key, par.value);
         }
     }

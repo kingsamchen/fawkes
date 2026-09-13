@@ -4,4 +4,17 @@
 
 #include "fawkes/router.hpp"
 
-namespace fawkes {} // namespace fawkes
+#include <utility>
+
+namespace fawkes {
+
+const route_handler_t* router::locate_route(request& req) const {
+    const auto tree_it = routes_.find(req.header().method());
+    if (tree_it == routes_.end()) {
+        return nullptr;
+    }
+
+    return tree_it->second.locate(req.path(), req.params());
+}
+
+} // namespace fawkes

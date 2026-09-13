@@ -3,14 +3,33 @@
 // in the LICENSE file.
 
 #include <optional>
+#include <string_view>
 #include <utility>
 
+#include <boost/asio/awaitable.hpp>
 #include <doctest/doctest.h>
 
 #include "fawkes/errors.hpp"
 #include "fawkes/request.hpp"
+#include "fawkes/router.hpp"
 
 namespace {
+
+namespace asio = boost::asio;
+namespace http = boost::beast::http;
+
+auto fake_handler() {
+    return [](const fawkes::request& /*req*/, fawkes::response& /*resp*/) -> asio::awaitable<void> {
+        co_return;
+    };
+}
+
+fawkes::request make_request(http::verb method, std::string_view target) {
+    fawkes::request::impl_type raw;
+    raw.method(method);
+    raw.target(target);
+    return fawkes::request(std::move(raw));
+}
 
 TEST_SUITE_BEGIN("HTTP Request");
 
@@ -88,6 +107,38 @@ TEST_CASE("Query parameters operations") {
         auto val2 = req.queries().get_or("key+4", "empty");
         CHECK_EQ(val2, "empty");
     }
+}
+
+TEST_CASE("Path parameter value is percent-decoded") {
+    fawkes::router router;
+    router.add_route(http::verb::get, "/items/:id", fake_handler());
+
+    auto req = make_request(http::verb::get, "/items/hello%20world%26friends");
+    REQUIRE_NE(router.locate_route(req), nullptr);
+
+    CHECK_EQ(req.as_impl().target(), "/items/hello%20world%26friends");
+    CHECK_EQ(req.path(), "/items/hello world&friends");
+    CHECK_EQ(req.params().get("id"), "hello world&friends");
+}
+
+TEST_CASE("Path parameters still work after copy from a request") {
+    fawkes::router router;
+    router.add_route(http::verb::get, "/foobar/:type/items/:id", fake_handler());
+
+    fawkes::request req_cp;
+
+    {
+        auto req_orig = make_request(http::verb::get, "/foobar/test/items/42");
+        const auto* handler = router.locate_route(req_orig);
+        REQUIRE_NE(handler, nullptr);
+
+        req_cp = req_orig;
+        CHECK_EQ(req_orig.params().get("type"), "test");
+        CHECK_EQ(req_orig.params().get("id"), "42");
+    }
+
+    CHECK_EQ(req_cp.params().get("type"), "test");
+    CHECK_EQ(req_cp.params().get("id"), "42");
 }
 
 TEST_SUITE_END(); // HTTP Request

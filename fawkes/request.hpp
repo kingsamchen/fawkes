@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <concepts>
 #include <string>
 #include <string_view>
 
@@ -101,6 +102,7 @@ private:
 };
 
 static_assert(std::is_nothrow_move_constructible_v<request> &&
-              std::is_nothrow_move_assignable_v<request>);
+              std::is_nothrow_move_assignable_v<request> &&
+              std::copyable<request>);
 
 } // namespace fawkes

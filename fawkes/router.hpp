@@ -21,34 +21,34 @@
 #include "fawkes/errors.hpp"
 #include "fawkes/is_asio_awaitable.hpp"
 #include "fawkes/middleware.hpp"
-#include "fawkes/path_params.hpp"
+#include "fawkes/request.hpp"
 #include "fawkes/tree.hpp"
 
 namespace fawkes {
 
 namespace asio = boost::asio;
-namespace beast = boost::beast;
 namespace http = boost::beast::http;
 namespace json = boost::json;
 
 template<typename F>
-concept is_user_handler = std::movable<std::decay_t<F>> &&
-                          std::invocable<F, const request&, response&> &&
-                          is_asio_awaitable_of_v<
-                              std::invoke_result_t<F, const request&, response&>,
-                              void>;
+concept is_user_handler =
+    std::move_constructible<std::decay_t<F>> &&
+    (!std::is_lvalue_reference_v<F> || std::copy_constructible<std::decay_t<F>>) &&
+    std::invocable<const std::decay_t<F>&, const request&, response&> &&
+    is_asio_awaitable_of_v<std::invoke_result_t<const std::decay_t<F>&, const request&, response&>,
+                           void>;
 
 class router {
 public:
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H>
-    void add_route(beast::http::verb verb, std::string_view path, H&& handler) {
+    void add_route(http::verb verb, std::string_view path, H&& handler) {
         add_route(verb, path, {}, std::forward<H>(handler));
     }
 
     // Throws `std::invalid_argument` if there is path conflict.
     template<is_user_handler H, is_middleware... Mws>
-    void add_route(beast::http::verb verb,
+    void add_route(http::verb verb,
                    std::string_view path,
                    std::tuple<Mws...>&& middlewares,
                    H&& handler) {
@@ -94,16 +94,8 @@ public:
         routes_[verb].add_route(path, std::move(route_handler));
     }
 
-    // `path` must outlive `ps`.
-    const route_handler_t* locate_route(beast::http::verb verb, std::string_view path,
-                                        path_params& ps) const {
-        const auto tree_it = routes_.find(verb);
-        if (tree_it == routes_.end()) {
-            return nullptr;
-        }
-
-        return tree_it->second.locate(path, ps);
-    }
+    // The path params of `req` will be updated.
+    [[nodiscard]] const route_handler_t* locate_route(request& req) const;
 
     // Router level middlewares, applied to all routes.
     template<is_middleware... Mws>
@@ -122,7 +114,7 @@ public:
     }
 
 private:
-    boost::unordered_flat_map<beast::http::verb, node> routes_;
+    boost::unordered_flat_map<http::verb, node> routes_;
     middleware_chain base_middlewares_;
 };
 
