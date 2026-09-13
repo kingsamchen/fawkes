@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include <boost/container/small_vector.hpp>
 #include <fmt/format.h>
 
 namespace fawkes {
@@ -57,8 +58,8 @@ public:
     friend bool operator==(const path_params& lhs, const path_params& rhs) noexcept = default;
 
 private:
-    // TODO(KC): consider using boost/small_vector instead.
-    std::vector<detail::param> ps_;
+    static constexpr std::size_t inline_param_count = 4UZ;
+    boost::container::small_vector<detail::param, inline_param_count> ps_;
 };
 
 } // namespace fawkes
