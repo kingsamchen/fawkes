@@ -252,7 +252,9 @@ asio::awaitable<http::message_generator> server::handle_request(
 
         co_return prepare_response(fwk_resp);
     } catch (const std::exception& ex) {
-        const json::object body{{"error", json::object{{"message", ex.what()}}}};
+        SPDLOG_ERROR("Unhandled exception for the request; what={}", ex.what());
+        const json::object body{
+            {"error", json::object{{"message", "Unexpected server error"}}}};
         co_return make_unexpected_error_response(http_ver,
                                                  keep_alive,
                                                  json::serialize(body));
