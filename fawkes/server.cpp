@@ -225,9 +225,7 @@ asio::awaitable<http::message_generator> server::handle_request(
 
         // Locating route completes path params for a request, and may be used in
         // a middleware.
-        const auto* handler = router_.locate_route(std::as_const(fwk_req).header().method(),
-                                                   std::as_const(fwk_req).path(),
-                                                   fwk_req.params());
+        const auto* handler = router_.locate_route(fwk_req);
 
         if (co_await router_.run_pre_handle(fwk_req, fwk_resp) == middleware_result::abort) {
             co_return prepare_response(fwk_resp);

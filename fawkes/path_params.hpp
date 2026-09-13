@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -15,41 +16,42 @@
 namespace fawkes {
 namespace detail {
 
+// `key` refs to the path in a route tree node.
 struct param {
     std::string_view key;
-    std::string_view value;
+    std::string value;
 
-    friend bool operator==(param lhs, param rhs) noexcept = default;
+    friend bool operator==(const param& lhs, const param& rhs) noexcept = default;
 };
 
 } // namespace detail
 
 class path_params {
 public:
-    // Caller must make sure the `key` and the `value` outlive the path_params.
+    // Caller must make sure `key` outlives the path_params.
     void add(std::string_view key, std::string_view value) {
-        ps_.push_back({.key = key, .value = value});
+        ps_.push_back({.key = key, .value = std::string{value}});
     }
 
     // Throws `std::out_of_range` if there is no match.
     [[nodiscard]] std::string_view get(std::string_view key) const {
-        const auto it = std::ranges::find_if(ps_, [key](detail::param pam) {
-            return pam.key == key;
+        const auto it = std::ranges::find_if(ps_, [key](const detail::param& param) {
+            return param.key == key;
         });
         if (it == ps_.end()) {
             throw std::out_of_range(fmt::format("param with key={} not found", key));
         }
-        return it->value;
+        return std::string_view{it->value};
     }
 
     [[nodiscard]] std::optional<std::string_view> try_get(std::string_view key) const {
-        const auto it = std::ranges::find_if(ps_, [key](detail::param pam) {
-            return pam.key == key;
+        const auto it = std::ranges::find_if(ps_, [key](const detail::param& param) {
+            return param.key == key;
         });
         if (it == ps_.end()) {
             return std::nullopt;
         }
-        return it->value;
+        return std::optional<std::string_view>(std::in_place, it->value);
     }
 
     friend bool operator==(const path_params& lhs, const path_params& rhs) noexcept = default;
