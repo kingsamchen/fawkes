@@ -28,7 +28,7 @@ public:
 
     request() = default;
 
-    // Throws `http_error` if path part of the URL is invalid.
+    // Throws `std::invalid_argument` if path part of the URL is invalid.
     explicit request(impl_type&& req_impl);
 
     // Path part of a request target, any percent-escapes are decoded.

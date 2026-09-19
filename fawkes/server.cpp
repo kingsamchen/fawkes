@@ -8,6 +8,7 @@
 #include <exception>
 #include <functional>
 #include <source_location>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -31,7 +32,6 @@
 #include <boost/beast/http/string_body.hpp>
 #include <boost/beast/http/write.hpp>
 #include <boost/beast/version.hpp>
-#include <boost/core/ignore_unused.hpp>
 #include <boost/json/object.hpp>
 #include <boost/json/serialize.hpp>
 #include <boost/system/system_error.hpp>
@@ -39,7 +39,6 @@
 #include <spdlog/spdlog.h>
 
 #include "fawkes/middleware.hpp"
-#include "fawkes/mime.hpp"
 #include "fawkes/request.hpp"
 #include "fawkes/response.hpp"
 
@@ -64,17 +63,6 @@ auto make_no_fail(F&& fn, std::source_location loc = std::source_location::curre
                          loc.file_name(), loc.line());
         }
     };
-}
-
-http::response<http::string_body> make_unexpected_error_response(unsigned int http_version,
-                                                                 bool keep_alive,
-                                                                 std::string&& body) {
-    http::response<http::string_body> resp{http::status::internal_server_error, http_version};
-    resp.set(http::field::content_type, mime::json);
-    resp.keep_alive(keep_alive);
-    resp.body() = std::move(body);
-    resp.prepare_payload();
-    return resp;
 }
 
 response::impl_type&& prepare_response(response& resp) {
@@ -219,46 +207,28 @@ asio::awaitable<http::message_generator> server::handle_request(
     const auto http_ver = req.version();
     const auto keep_alive = req.keep_alive();
 
+    response fwk_resp(http_ver, keep_alive);
     try {
         request fwk_req(std::move(req));
-        response fwk_resp(http_ver, keep_alive);
-
-        // Locating route completes path params for a request, and may be used in
-        // a middleware.
-        const auto* handler = router_.locate_route(fwk_req);
-
-        if (co_await router_.run_pre_handle(fwk_req, fwk_resp) == middleware_result::abort) {
-            co_return prepare_response(fwk_resp);
-        }
-
-        // User handler not found is not an unexpected error and thus should not abort
-        // router-level middlewares.
-        if (!handler) {
-            const json::object body{
-                {"error", json::object{{"message", "Unknown resource"}}}};
-            fwk_resp.json(http::status::not_found, json::serialize(body));
-            boost::ignore_unused(co_await router_.run_post_handle(fwk_req, fwk_resp));
-            co_return prepare_response(fwk_resp);
-        }
-
-        const auto result = co_await (*handler)(fwk_req, fwk_resp);
-
-        // Aborted by a per-route middleware.
-        if (result == middleware_result::abort) {
-            co_return prepare_response(fwk_resp);
-        }
-
-        boost::ignore_unused(co_await router_.run_post_handle(fwk_req, fwk_resp));
-
-        co_return prepare_response(fwk_resp);
+        co_await router_.dispatch(fwk_req, fwk_resp);
+    } catch (const std::invalid_argument& ex) {
+        SPDLOG_ERROR("Unexpected invalid argument for the request; what={}", ex.what());
+        const json::object body{
+            {"error", json::object{{"message", "Invalid request"}}}};
+        fwk_resp.json(http::status::bad_request, json::serialize(body));
     } catch (const std::exception& ex) {
-        SPDLOG_ERROR("Unhandled exception for the request; what={}", ex.what());
+        SPDLOG_ERROR("Unexpected exception for the request; what={}", ex.what());
         const json::object body{
             {"error", json::object{{"message", "Unexpected server error"}}}};
-        co_return make_unexpected_error_response(http_ver,
-                                                 keep_alive,
-                                                 json::serialize(body));
+        fwk_resp.json(http::status::internal_server_error, json::serialize(body));
+    } catch (...) {
+        SPDLOG_ERROR("Unexpected unknown exception for the request");
+        const json::object body{
+            {"error", json::object{{"message", "Unexpected server error"}}}};
+        fwk_resp.json(http::status::internal_server_error, json::serialize(body));
     }
+
+    co_return prepare_response(fwk_resp);
 }
 
 // static

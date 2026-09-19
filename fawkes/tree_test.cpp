@@ -11,6 +11,7 @@
 
 #include "fawkes/middleware.hpp"
 #include "fawkes/path_params.hpp"
+#include "fawkes/request.hpp"
 #include "fawkes/tree.hpp"
 
 #include "test_utils/stringification.hpp" // IWYU pragma: keep

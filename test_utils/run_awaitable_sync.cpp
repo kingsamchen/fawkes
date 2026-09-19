@@ -4,17 +4,23 @@
 
 #include "test_utils/run_awaitable_sync.hpp"
 
+#include <exception>
 #include <utility>
 
 #include <boost/asio/co_spawn.hpp>
-#include <boost/asio/detached.hpp>
 
 namespace test_util {
 
 void run_awaitable_sync(asio::io_context& ioc, asio::awaitable<void> awaitable) {
-    asio::co_spawn(ioc, std::move(awaitable), asio::detached);
+    std::exception_ptr eptr;
+    asio::co_spawn(ioc, std::move(awaitable), [&eptr](std::exception_ptr error) {
+        eptr = error;
+    });
     ioc.run();
     ioc.restart();
+    if (eptr) {
+        std::rethrow_exception(eptr);
+    }
 }
 
 } // namespace test_util

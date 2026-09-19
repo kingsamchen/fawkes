@@ -4,6 +4,7 @@
 
 #include "fawkes/request.hpp"
 
+#include <stdexcept>
 #include <string_view>
 #include <utility>
 
@@ -11,8 +12,6 @@
 #include <boost/url/parse.hpp>
 #include <boost/url/parse_query.hpp>
 #include <spdlog/spdlog.h>
-
-#include "fawkes/errors.hpp"
 
 namespace fawkes {
 
@@ -23,7 +22,8 @@ request::request(impl_type&& req_impl)
     const auto path = target.substr(0, pos);
     auto or_path = urls::parse_origin_form(path);
     if (or_path.has_error()) {
-        throw http_error(http::status::bad_request, "invalid url path");
+        SPDLOG_ERROR("Invalid request url path; target={}", target);
+        throw std::invalid_argument("invalid url path");
     }
 
     url_ = *or_path;

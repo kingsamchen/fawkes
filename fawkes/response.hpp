@@ -28,7 +28,7 @@ public:
 
     response() = default;
 
-    explicit response(impl_type&& resp_impl)
+    explicit response(impl_type&& resp_impl) noexcept
         : impl_(std::move(resp_impl)) {}
 
     response(unsigned int version, bool keep_alive) {
@@ -55,10 +55,11 @@ public:
         return impl_.result_int();
     }
 
-    void set_status(http::status status) {
+    void set_status(http::status status) noexcept {
         impl_.result(status);
     }
 
+    // Throws `std::invalid_argument` if `status_code` > 999.
     void set_status_code(std::uint32_t status_code) {
         impl_.result(status_code);
     }
