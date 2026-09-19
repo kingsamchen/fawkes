@@ -4,21 +4,22 @@
 
 #pragma once
 
-#include <any>
-#include <cassert>
 #include <concepts>
+#include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 
 #include "fawkes/is_asio_awaitable.hpp"
+#include "fawkes/response.hpp"
 
 namespace fawkes {
 
-// Forward declarations for concepts.
+// Forward declaration for concepts.
 class request;
-class response;
 
 enum class middleware_result : std::uint8_t {
     abort,
@@ -52,84 +53,147 @@ template<typename T>
 concept is_middleware = has_pre_handle<T> || has_coro_pre_handle<T> ||
                         has_post_handle<T> || has_coro_post_handle<T>;
 
+using route_handler_t =
+    std::move_only_function<asio::awaitable<middleware_result>(request&, response&) const>;
+
 namespace detail {
 
-template<bool IsForward, std::size_t... I, is_middleware... Mws, typename F>
-asio::awaitable<middleware_result> apply_middlewares_impl(const std::tuple<Mws...>& middlewares,
-                                                          std::index_sequence<I...> idx_seq,
+struct middleware_call_result {
+    middleware_result result{middleware_result::proceed};
+    std::exception_ptr eptr;
+};
+
+struct middleware_run_state {
+    std::size_t entered_count{0UZ};
+    middleware_result result{middleware_result::proceed};
+    std::exception_ptr eptr;
+
+    void absorb(const middleware_call_result& call_result) noexcept(
+        std::is_nothrow_copy_assignable_v<std::exception_ptr>) {
+        if (call_result.result == middleware_result::abort) {
+            result = middleware_result::abort;
+        }
+        if (!eptr && call_result.eptr) {
+            eptr = call_result.eptr;
+        }
+        // TODO(KC): Log the omitted exception.
+    }
+};
+
+template<is_middleware M>
+asio::awaitable<middleware_call_result> invoke_pre_handle(const M& middleware,
                                                           request& req,
-                                                          response& resp,
-                                                          F&& fn) {
-    using enum middleware_result;
-
-    constexpr auto N = idx_seq.size();
-    auto&& f = std::forward<F>(fn);
-    // Short circuit if possible.
-    bool run_all = true;
-    if constexpr (IsForward) {
-        run_all = ((co_await f(std::get<I>(middlewares), req, resp) == proceed) && ...);
-    } else {
-        run_all = ((co_await f(std::get<N - I - 1>(middlewares), req, resp) == proceed) && ...);
+                                                          response& resp) {
+    middleware_call_result call_result;
+    try {
+        if constexpr (has_pre_handle<M>) {
+            call_result.result = middleware.pre_handle(req, resp);
+        } else if constexpr (has_coro_pre_handle<M>) {
+            call_result.result = co_await middleware.pre_handle(req, resp);
+        }
+    } catch (...) {
+        call_result.result = middleware_result::abort;
+        call_result.eptr = std::current_exception();
+        resp.set_status(http::status::internal_server_error);
     }
-    co_return run_all ? proceed : abort;
+    co_return call_result;
 }
 
-template<bool IsForward, is_middleware... Mws, typename F>
-asio::awaitable<middleware_result> apply_middlewares(const std::tuple<Mws...>& middlewares,
-                                                     request& req,
-                                                     response& resp,
-                                                     F&& fn) {
-    using idx_seq_t = std::make_index_sequence<std::tuple_size_v<std::tuple<Mws...>>>;
-    return apply_middlewares_impl<IsForward>(
-        middlewares, idx_seq_t{}, req, resp, std::forward<F>(fn));
+template<is_middleware M>
+asio::awaitable<middleware_call_result> invoke_post_handle(const M& middleware,
+                                                           request& req,
+                                                           response& resp) {
+    middleware_call_result call_result;
+    try {
+        if constexpr (has_post_handle<M>) {
+            call_result.result = middleware.post_handle(req, resp);
+        } else if constexpr (has_coro_post_handle<M>) {
+            call_result.result = co_await middleware.post_handle(req, resp);
+        }
+    } catch (...) {
+        call_result.result = middleware_result::abort;
+        call_result.eptr = std::current_exception();
+        resp.set_status(http::status::internal_server_error);
+    }
+    co_return call_result;
 }
 
-template<is_middleware... Mws>
-asio::awaitable<middleware_result> run_middlewares_pre_handle(
-    const std::tuple<Mws...>& middlewares, request& req, response& resp) {
+template<typename F>
+asio::awaitable<middleware_call_result> invoke_inner_handler(const F& inner_handler,
+                                                             request& req,
+                                                             response& resp) {
+    middleware_call_result call_result;
+    try {
+        call_result.result = co_await inner_handler(req, resp);
+    } catch (...) {
+        call_result.result = middleware_result::abort;
+        call_result.eptr = std::current_exception();
+        resp.set_status(http::status::internal_server_error);
+    }
+    co_return call_result;
+}
+
+template<std::size_t... I, is_middleware... Mws, typename F>
+asio::awaitable<middleware_result> run_middlewares_impl(const std::tuple<Mws...>& middlewares,
+                                                        std::index_sequence<I...> /*idx_seq*/,
+                                                        request& req,
+                                                        response& resp,
+                                                        const F& inner_handler) {
     if constexpr (sizeof...(Mws) == 0) {
-        co_return middleware_result::proceed;
+        const auto call_result = co_await invoke_inner_handler(inner_handler, req, resp);
+        if (call_result.eptr) {
+            std::rethrow_exception(call_result.eptr);
+        }
+        co_return call_result.result;
     } else {
-        co_return co_await apply_middlewares<true>(
-            middlewares,
-            req,
-            resp,
-            []<is_middleware M>(const M& middleware,
-                                request& mw_req,
-                                response& mw_resp) -> asio::awaitable<middleware_result> {
-                if constexpr (has_pre_handle<M>) {
-                    co_return middleware.pre_handle(mw_req, mw_resp);
-                } else if constexpr (has_coro_pre_handle<M>) {
-                    co_return co_await middleware.pre_handle(mw_req, mw_resp);
-                } else {
-                    co_return middleware_result::proceed;
-                }
-            });
+        middleware_run_state state;
+
+        // NOLINTNEXTLINE(*-avoid-capturing-lambda-coroutines)
+        auto enter = [&]<std::size_t Index>() -> asio::awaitable<bool> {
+            const auto call_result = co_await invoke_pre_handle(std::get<Index>(middlewares),
+                                                                req,
+                                                                resp);
+            // A middleware is entered only after its pre handler completes.
+            if (!call_result.eptr) {
+                ++state.entered_count;
+            }
+            state.absorb(call_result);
+            co_return call_result.result == middleware_result::proceed;
+        };
+        const bool should_invoke_inner_handler = ((co_await enter.template operator()<I>()) && ...);
+        if (should_invoke_inner_handler) {
+            state.absorb(co_await invoke_inner_handler(inner_handler, req, resp));
+        }
+
+        // Every entered middleware is unwound, even if a post handler fails.
+        // NOLINTNEXTLINE(*-avoid-capturing-lambda-coroutines)
+        auto leave = [&]<std::size_t Index>() -> asio::awaitable<void> {
+            if (Index < state.entered_count) {
+                state.absorb(co_await invoke_post_handle(std::get<Index>(middlewares), req, resp));
+            }
+            co_return;
+        };
+        ((co_await leave.template operator()<sizeof...(Mws) - I - 1>()), ...);
+
+        if (state.eptr) {
+            std::rethrow_exception(state.eptr);
+        }
+        co_return state.result;
     }
 }
 
-template<is_middleware... Mws>
-asio::awaitable<middleware_result> run_middlewares_post_handle(
-    const std::tuple<Mws...>& middlewares, request& req, response& resp) {
-    if constexpr (sizeof...(Mws) == 0) {
-        co_return middleware_result::proceed;
-    } else {
-        co_return co_await apply_middlewares<false>(
-            middlewares,
-            req,
-            resp,
-            []<is_middleware M>(const M& middleware,
-                                request& mw_req,
-                                response& mw_resp) -> asio::awaitable<middleware_result> {
-                if constexpr (has_post_handle<M>) {
-                    co_return middleware.post_handle(mw_req, mw_resp);
-                } else if constexpr (has_coro_post_handle<M>) {
-                    co_return co_await middleware.post_handle(mw_req, mw_resp);
-                } else {
-                    co_return middleware_result::proceed;
-                }
-            });
-    }
+// If a middleware's pre_handle completes, including by returning an `abort`
+// result, its post_handle is guaranteed to run during unwind.
+// But if its pre_handle throws, its post_handle is skipped. If multiple
+// exceptions occur, only the first is preserved and rethrown, allowing an
+// exception from the user-provided route handler to take precedence.
+template<is_middleware... Mws, typename F>
+asio::awaitable<middleware_result> run_middlewares(const std::tuple<Mws...>& middlewares,
+                                                   request& req,
+                                                   response& resp,
+                                                   const F& inner_handler) {
+    using idx_seq_t = std::make_index_sequence<sizeof...(Mws)>;
+    return run_middlewares_impl(middlewares, idx_seq_t{}, req, resp, inner_handler);
 }
 
 } // namespace detail
@@ -142,51 +206,27 @@ public:
         using middlewares_t = std::tuple<Mws...>;
         static_assert(std::tuple_size_v<middlewares_t> > 0, "middlewares cannot be empty");
 
-        middlewares_ = std::move(middlewares);
-        const void* const ptr = std::any_cast<middlewares_t>(&middlewares_);
-        assert(ptr != nullptr);
-        const auto& mws = *static_cast<const middlewares_t*>(ptr);
-
-        if constexpr ((has_pre_handle<Mws> || ...) || (has_coro_pre_handle<Mws> || ...)) {
-            pre_impl_ = [&mws](request& req, response& resp)
-                -> asio::awaitable<middleware_result> {
-                return detail::run_middlewares_pre_handle(mws, req, resp);
-            };
-        }
-
-        if constexpr ((has_post_handle<Mws> || ...) || (has_coro_post_handle<Mws> || ...)) {
-            post_impl_ = [&mws](request& req, response& resp)
-                -> asio::awaitable<middleware_result> {
-                return detail::run_middlewares_post_handle(mws, req, resp);
-            };
-        }
+        mws_runner_ = [mws = std::move(middlewares)](request& req,
+                                                     response& resp,
+                                                     const route_handler_t& inner_handler)
+            -> asio::awaitable<middleware_result> {
+            return detail::run_middlewares(mws, req, resp, inner_handler);
+        };
     }
 
-    [[nodiscard]] asio::awaitable<middleware_result> pre_handle(request& req,
-                                                                response& resp) const {
-        if (!pre_impl_) {
-            co_return middleware_result::proceed;
+    [[nodiscard]] asio::awaitable<middleware_result> run(
+        request& req, response& resp, const route_handler_t& inner_handler) const {
+        if (!mws_runner_) {
+            return inner_handler(req, resp);
         }
-
-        co_return co_await pre_impl_(req, resp);
-    }
-
-    [[nodiscard]] asio::awaitable<middleware_result> post_handle(request& req,
-                                                                 response& resp) const {
-        if (!post_impl_) {
-            co_return middleware_result::proceed;
-        }
-
-        co_return co_await post_impl_(req, resp);
+        return mws_runner_(req, resp, inner_handler);
     }
 
 private:
-    using handler_t =
-        std::move_only_function<asio::awaitable<middleware_result>(request&, response&) const>;
+    using middleware_runner_t = std::move_only_function<asio::awaitable<middleware_result>(
+        request&, response&, const route_handler_t&) const>;
 
-    std::any middlewares_;
-    handler_t pre_impl_;
-    handler_t post_impl_;
+    middleware_runner_t mws_runner_;
 };
 
 static_assert(std::is_nothrow_move_constructible_v<middleware_chain>);

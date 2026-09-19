@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -19,13 +18,8 @@
 
 #include "fawkes/middleware.hpp"
 #include "fawkes/path_params.hpp"
-#include "fawkes/request.hpp"
-#include "fawkes/response.hpp"
 
 namespace fawkes {
-
-using route_handler_t =
-    std::move_only_function<boost::asio::awaitable<middleware_result>(request&, response&) const>;
 
 namespace detail {
 

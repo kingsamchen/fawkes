@@ -2,9 +2,12 @@
 // This file is subject to the terms of license that can be found
 // in the LICENSE file.
 
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/io_context.hpp>
@@ -20,6 +23,14 @@
 namespace {
 
 namespace asio = boost::asio;
+namespace http = boost::beast::http;
+
+fawkes::request make_request(http::verb method, std::string_view target) {
+    fawkes::request::impl_type raw;
+    raw.method(method);
+    raw.target(target);
+    return fawkes::request(std::move(raw));
+}
 
 TEST_SUITE_BEGIN("Routes");
 
@@ -190,6 +201,75 @@ struct m_coro_append_t {
     }
 };
 
+fawkes::route_handler_t make_route_handler() {
+    return [](fawkes::request& /*req*/, fawkes::response& /*resp*/)
+               -> asio::awaitable<fawkes::middleware_result> {
+        co_return fawkes::middleware_result::proceed;
+    };
+}
+
+fawkes::middleware_result run_middleware_chain(asio::io_context& ioc,
+                                               const fawkes::middleware_chain& chain,
+                                               fawkes::request& req,
+                                               fawkes::response& resp) {
+    const auto inner_handler = make_route_handler();
+    return test_util::run_awaitable_sync(ioc, chain.run(req, resp, inner_handler));
+}
+
+struct m_trace_t {
+    std::string name;
+    std::vector<std::string>* trace{nullptr};
+    fawkes::middleware_result pre_result{fawkes::middleware_result::proceed};
+    bool throw_from_pre{false};
+    bool throw_from_post{false};
+
+    fawkes::middleware_result pre_handle(fawkes::request& /*req*/,
+                                         fawkes::response& /*resp*/) const {
+        trace->push_back(name + ".pre");
+        if (throw_from_pre) {
+            throw std::runtime_error(name);
+        }
+        return pre_result;
+    }
+
+    fawkes::middleware_result post_handle(fawkes::request& /*req*/,
+                                          fawkes::response& /*resp*/) const {
+        trace->push_back(name + ".post");
+        if (throw_from_post) {
+            throw std::runtime_error(name);
+        }
+        return fawkes::middleware_result::proceed;
+    }
+};
+
+// All middlewares pre_handle
+//   -> inner handler
+//        -> all middlewares post_handle in reversed order.
+TEST_CASE("Middleware chain runs in onion order") {
+    asio::io_context ioc;
+    std::vector<std::string> trace;
+    const auto middleware_tuple =
+        fawkes::middlewares::use(m_trace_t{.name = "A", .trace = &trace},
+                                 m_trace_t{.name = "B", .trace = &trace},
+                                 m_trace_t{.name = "C", .trace = &trace});
+    // NOLINTNEXTLINE(*-avoid-capturing-lambda-coroutines)
+    const auto inner_handler = [&trace](fawkes::request& /*req*/, fawkes::response& /*resp*/)
+        -> asio::awaitable<fawkes::middleware_result> {
+        trace.emplace_back("handler");
+        co_return fawkes::middleware_result::proceed;
+    };
+    fawkes::request req;
+    fawkes::response resp;
+
+    const auto result = test_util::run_awaitable_sync(
+        ioc, fawkes::detail::run_middlewares(middleware_tuple, req, resp, inner_handler));
+
+    CHECK_EQ(result, fawkes::middleware_result::proceed);
+    const std::vector<std::string> expected_trace{
+        "A.pre", "B.pre", "C.pre", "handler", "C.post", "B.post", "A.post"};
+    CHECK_EQ(trace, expected_trace);
+}
+
 TEST_CASE("Middleware_chain with both pre/post handle") {
     asio::io_context ioc;
 
@@ -201,12 +281,7 @@ TEST_CASE("Middleware_chain with both pre/post handle") {
                                     m_count_both_t{.pre_cnt = &pre_cnt, .post_cnt = &post_cnt}));
     fawkes::request req;
     fawkes::response resp;
-    auto ret = test_util::run_awaitable_sync(ioc, mc.pre_handle(req, resp));
-    REQUIRE_EQ(ret, fawkes::middleware_result::proceed);
-    CHECK_EQ(pre_cnt, 2);
-    CHECK_EQ(post_cnt, 0);
-
-    ret = test_util::run_awaitable_sync(ioc, mc.post_handle(req, resp));
+    const auto ret = run_middleware_chain(ioc, mc, req, resp);
     REQUIRE_EQ(ret, fawkes::middleware_result::proceed);
     CHECK_EQ(pre_cnt, 2);
     CHECK_EQ(post_cnt, 2);
@@ -224,12 +299,7 @@ TEST_CASE("Middleware_chain with only pre handle") {
 
     fawkes::request req;
     fawkes::response resp;
-    auto ret = test_util::run_awaitable_sync(ioc, mc.pre_handle(req, resp));
-    REQUIRE_EQ(ret, fawkes::middleware_result::proceed);
-    CHECK_EQ(pre_cnt, 3);
-    CHECK_EQ(post_cnt, 0);
-
-    ret = test_util::run_awaitable_sync(ioc, mc.post_handle(req, resp));
+    const auto ret = run_middleware_chain(ioc, mc, req, resp);
     REQUIRE_EQ(ret, fawkes::middleware_result::proceed);
     CHECK_EQ(pre_cnt, 3);
     CHECK_EQ(post_cnt, 0);
@@ -247,12 +317,7 @@ TEST_CASE("Middleware_chain with only post handle") {
 
     fawkes::request req;
     fawkes::response resp;
-    auto ret = test_util::run_awaitable_sync(ioc, mc.pre_handle(req, resp));
-    REQUIRE_EQ(ret, fawkes::middleware_result::proceed);
-    CHECK_EQ(pre_cnt, 0);
-    CHECK_EQ(post_cnt, 0);
-
-    ret = test_util::run_awaitable_sync(ioc, mc.post_handle(req, resp));
+    const auto ret = run_middleware_chain(ioc, mc, req, resp);
     REQUIRE_EQ(ret, fawkes::middleware_result::proceed);
     CHECK_EQ(pre_cnt, 0);
     CHECK_EQ(post_cnt, 3);
@@ -269,12 +334,7 @@ TEST_CASE("Missing pre handle in the middle") {
                                     m_count_pre_t{&pre_cnt}));
     fawkes::request req;
     fawkes::response resp;
-    auto ret = test_util::run_awaitable_sync(ioc, mc.pre_handle(req, resp));
-    REQUIRE_EQ(ret, fawkes::middleware_result::proceed);
-    CHECK_EQ(pre_cnt, 2);
-    CHECK_EQ(post_cnt, 0);
-
-    ret = test_util::run_awaitable_sync(ioc, mc.post_handle(req, resp));
+    const auto ret = run_middleware_chain(ioc, mc, req, resp);
     REQUIRE_EQ(ret, fawkes::middleware_result::proceed);
     CHECK_EQ(pre_cnt, 2);
     CHECK_EQ(post_cnt, 1);
@@ -291,12 +351,7 @@ TEST_CASE("Missing post handle in the middle") {
                                     m_count_post_t{&post_cnt}));
     fawkes::request req;
     fawkes::response resp;
-    auto ret = test_util::run_awaitable_sync(ioc, mc.pre_handle(req, resp));
-    REQUIRE_EQ(ret, fawkes::middleware_result::proceed);
-    CHECK_EQ(pre_cnt, 1);
-    CHECK_EQ(post_cnt, 0);
-
-    ret = test_util::run_awaitable_sync(ioc, mc.post_handle(req, resp));
+    const auto ret = run_middleware_chain(ioc, mc, req, resp);
     REQUIRE_EQ(ret, fawkes::middleware_result::proceed);
     CHECK_EQ(pre_cnt, 1);
     CHECK_EQ(post_cnt, 2);
@@ -307,15 +362,18 @@ TEST_CASE("Abort from pre handle") {
 
     fawkes::middleware_chain mc;
     int pre_cnt = 0;
+    int post_cnt = 0;
     mc.set(fawkes::middlewares::use(m_count_pre_t{&pre_cnt},
+                                    m_count_post_t{&post_cnt},
                                     m_abort_pre_t{},
-                                    m_count_pre_t{&pre_cnt}));
+                                    m_count_post_t{&post_cnt}));
 
     fawkes::request req;
     fawkes::response resp;
-    auto ret = test_util::run_awaitable_sync(ioc, mc.pre_handle(req, resp));
+    const auto ret = run_middleware_chain(ioc, mc, req, resp);
     REQUIRE_EQ(ret, fawkes::middleware_result::abort);
     CHECK_EQ(pre_cnt, 1);
+    CHECK_EQ(post_cnt, 1);
 }
 
 TEST_CASE("Abort from post handle") {
@@ -329,9 +387,28 @@ TEST_CASE("Abort from post handle") {
 
     fawkes::request req;
     fawkes::response resp;
-    auto ret = test_util::run_awaitable_sync(ioc, mc.post_handle(req, resp));
+    const auto ret = run_middleware_chain(ioc, mc, req, resp);
     REQUIRE_EQ(ret, fawkes::middleware_result::abort);
-    CHECK_EQ(post_cnt, 1);
+    CHECK_EQ(post_cnt, 2);
+}
+
+// Post middleware throws -> remaining entered middleware still unwind.
+TEST_CASE("Post exception continues middleware unwind") {
+    asio::io_context ioc;
+    std::vector<std::string> trace;
+    fawkes::middleware_chain mc;
+    mc.set(fawkes::middlewares::use(
+        m_trace_t{.name = "A", .trace = &trace},
+        m_trace_t{.name = "B", .trace = &trace, .throw_from_post = true},
+        m_trace_t{.name = "C", .trace = &trace}));
+    fawkes::request req;
+    fawkes::response resp;
+
+    CHECK_THROWS_AS(run_middleware_chain(ioc, mc, req, resp), std::runtime_error);
+    CHECK_EQ(resp.status(), http::status::internal_server_error);
+    const std::vector<std::string> expected_trace{
+        "A.pre", "B.pre", "C.pre", "C.post", "B.post", "A.post"};
+    CHECK_EQ(trace, expected_trace);
 }
 
 TEST_CASE("No-op for empty middleware chain") {
@@ -340,10 +417,7 @@ TEST_CASE("No-op for empty middleware chain") {
     const fawkes::middleware_chain mc;
     fawkes::request req;
     fawkes::response resp;
-    CHECK_EQ(test_util::run_awaitable_sync(ioc, mc.pre_handle(req, resp)),
-             fawkes::middleware_result::proceed);
-    CHECK_EQ(test_util::run_awaitable_sync(ioc, mc.post_handle(req, resp)),
-             fawkes::middleware_result::proceed);
+    CHECK_EQ(run_middleware_chain(ioc, mc, req, resp), fawkes::middleware_result::proceed);
 }
 
 TEST_CASE("Skip no middleware") {
@@ -352,11 +426,9 @@ TEST_CASE("Skip no middleware") {
     fawkes::request req;
     fawkes::response resp;
     auto t = std::make_tuple();
-    auto pre_result = fawkes::detail::run_middlewares_pre_handle(t, req, resp);
-    CHECK_EQ(test_util::run_awaitable_sync(ioc, std::move(pre_result)),
-             fawkes::middleware_result::proceed);
-    auto post_result = fawkes::detail::run_middlewares_post_handle(t, req, resp);
-    CHECK_EQ(test_util::run_awaitable_sync(ioc, std::move(post_result)),
+    const auto inner_handler = make_route_handler();
+    auto result = fawkes::detail::run_middlewares(t, req, resp, inner_handler);
+    CHECK_EQ(test_util::run_awaitable_sync(ioc, std::move(result)),
              fawkes::middleware_result::proceed);
 }
 
@@ -370,7 +442,7 @@ TEST_CASE("Coroutine middlewares are invoked sequentially") {
 
     fawkes::request req;
     fawkes::response resp;
-    auto ret = test_util::run_awaitable_sync(ioc, mc.pre_handle(req, resp));
+    const auto ret = run_middleware_chain(ioc, mc, req, resp);
     REQUIRE_EQ(ret, fawkes::middleware_result::proceed);
     CHECK_EQ(resp.body(), "ABC");
 }
@@ -387,7 +459,7 @@ TEST_CASE("Mixing coroutine and normal middlewares") {
 
     fawkes::request req;
     fawkes::response resp;
-    auto ret = test_util::run_awaitable_sync(ioc, mc.pre_handle(req, resp));
+    const auto ret = run_middleware_chain(ioc, mc, req, resp);
     REQUIRE_EQ(ret, fawkes::middleware_result::proceed);
     CHECK_EQ(pre_cnt, 2);
     CHECK_EQ(resp.body(), "XY");
@@ -404,9 +476,76 @@ TEST_CASE("Abort coroutine middleware after normal middleware") {
 
     fawkes::request req;
     fawkes::response resp;
-    auto ret = test_util::run_awaitable_sync(ioc, mc.pre_handle(req, resp));
+    const auto ret = run_middleware_chain(ioc, mc, req, resp);
     REQUIRE_EQ(ret, fawkes::middleware_result::abort);
     CHECK_EQ(pre_cnt, 1);
+}
+
+TEST_CASE("Middleware abort unwinds all prior but skips inner") {
+    asio::io_context ioc;
+    std::vector<std::string> trace;
+    fawkes::router router;
+    router.use(m_trace_t{.name = "G1", .trace = &trace},
+               m_trace_t{.name = "G2", .trace = &trace});
+    router.add_route(
+        http::verb::get,
+        "/items",
+        fawkes::middlewares::use(
+            m_trace_t{.name = "R1", .trace = &trace},
+            m_trace_t{.name = "R2",
+                      .trace = &trace,
+                      .pre_result = fawkes::middleware_result::abort},
+            m_trace_t{.name = "R3", .trace = &trace}),
+        // NOLINTNEXTLINE(*-avoid-capturing-lambda-coroutines)
+        [&trace](const fawkes::request& /*req*/,
+                 fawkes::response& /*resp*/) -> asio::awaitable<void> {
+            trace.emplace_back("handler");
+            co_return;
+        });
+    auto req = make_request(http::verb::get, "/items");
+    fawkes::response resp;
+
+    test_util::run_awaitable_sync(ioc, router.dispatch(req, resp));
+    // Abort is also a kind of completion.
+    const std::vector<std::string> expected_trace{"G1.pre",
+                                                  "G2.pre",
+                                                  "R1.pre",
+                                                  "R2.pre",
+                                                  "R2.post",
+                                                  "R1.post",
+                                                  "G2.post",
+                                                  "G1.post"};
+    CHECK_EQ(trace, expected_trace);
+}
+
+TEST_CASE("Middleware pre exception skips post and inner but unwinds prior") {
+    asio::io_context ioc;
+    std::vector<std::string> trace;
+    fawkes::router router;
+    router.use(m_trace_t{.name = "G1", .trace = &trace},
+               m_trace_t{.name = "G2", .trace = &trace});
+    router.add_route(
+        http::verb::get,
+        "/items",
+        fawkes::middlewares::use(
+            m_trace_t{.name = "R1", .trace = &trace},
+            m_trace_t{.name = "R2", .trace = &trace, .throw_from_pre = true},
+            m_trace_t{.name = "R3", .trace = &trace}),
+        // NOLINTNEXTLINE(*-avoid-capturing-lambda-coroutines)
+        [&trace](const fawkes::request& /*req*/,
+                 fawkes::response& /*resp*/) -> asio::awaitable<void> {
+            trace.emplace_back("handler");
+            co_return;
+        });
+    auto req = make_request(http::verb::get, "/items");
+    fawkes::response resp;
+
+    CHECK_THROWS_AS(test_util::run_awaitable_sync(ioc, router.dispatch(req, resp)),
+                    std::runtime_error);
+    CHECK_EQ(resp.status(), http::status::internal_server_error);
+    const std::vector<std::string> expected_trace{
+        "G1.pre", "G2.pre", "R1.pre", "R2.pre", "R1.post", "G2.post", "G1.post"};
+    CHECK_EQ(trace, expected_trace);
 }
 
 TEST_SUITE_END(); // Middleware

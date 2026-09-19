@@ -5,7 +5,6 @@
 #pragma once
 
 #include <concepts>
-#include <exception>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
@@ -52,44 +51,32 @@ public:
                    std::string_view path,
                    std::tuple<Mws...>&& middlewares,
                    H&& handler) {
-        auto hd = []<typename T>(T&& value) -> std::decay_t<T> { // NOLINT(*-missing-std-forward)
-            if constexpr (std::is_lvalue_reference_v<T>) {
-                return value;
-            } else {
-                return static_cast<T&&>(value);
-            }
-        }((std::forward<H>(handler)));
-
         // The lambda coroutine is stored and kept alive in routes.
         route_handler_t route_handler =
             [mws = std::move(middlewares), // NOLINT(*-avoid-capturing-lambda-coroutines)
-             user_handler = std::move(hd)](request& req, response& resp)
+             user_handler = std::forward<H>(handler)](request& req, response& resp)
             -> asio::awaitable<middleware_result> {
             using enum middleware_result;
 
-            // Throwing from user handler would not abort either per-route middlewares or
-            // router-level middlewares.
-            // However, throwing from any middleware would be like aborting from the middleware.
-
-            if (co_await detail::run_middlewares_pre_handle(mws, req, resp) == abort) {
-                co_return abort;
-            }
-
-            try {
-                co_await user_handler(std::as_const(req), resp);
-            } catch (const http_error& ex) {
-                json::object err{{"message", ex.what()}};
-                if (const auto& ec = ex.error_code(); ec.has_value()) {
-                    err["code"] = *ec;
+            const auto adapted_user_handler =
+                [&user_handler]( // NOLINT(*-avoid-capturing-lambda-coroutines)
+                    request& handler_req, response& handler_resp)
+                -> asio::awaitable<middleware_result> {
+                try {
+                    co_await user_handler(std::as_const(handler_req), handler_resp);
+                } catch (const http_error& ex) {
+                    // `http_error` is a part of the expected handler outcome, the request
+                    // handling doesn't fail.
+                    json::object err{{"message", ex.what()}};
+                    if (const auto& ec = ex.error_code(); ec.has_value()) {
+                        err["code"] = *ec;
+                    }
+                    const json::object body{{"error", std::move(err)}};
+                    handler_resp.json(ex.status_code(), json::serialize(body));
                 }
-                const json::object body{{"error", std::move(err)}};
-                resp.json(ex.status_code(), json::serialize(body));
-            } catch (const std::exception& ex) {
-                const json::object body{{"error", json::object{{"message", ex.what()}}}};
-                resp.json(http::status::internal_server_error, json::serialize(body));
-            }
-
-            co_return co_await detail::run_middlewares_post_handle(mws, req, resp);
+                co_return proceed;
+            };
+            co_return co_await detail::run_middlewares(mws, req, resp, adapted_user_handler);
         };
         routes_[verb].add_route(path, std::move(route_handler));
     }
@@ -97,20 +84,12 @@ public:
     // The path params of `req` will be updated.
     [[nodiscard]] const route_handler_t* locate_route(request& req) const;
 
+    [[nodiscard]] asio::awaitable<void> dispatch(request& req, response& resp) const;
+
     // Router level middlewares, applied to all routes.
     template<is_middleware... Mws>
     void use(Mws... mws) {
         base_middlewares_.set(std::make_tuple(std::move(mws)...));
-    }
-
-    [[nodiscard]] asio::awaitable<middleware_result> run_pre_handle(request& req,
-                                                                    response& resp) const {
-        return base_middlewares_.pre_handle(req, resp);
-    }
-
-    [[nodiscard]] asio::awaitable<middleware_result> run_post_handle(request& req,
-                                                                     response& resp) const {
-        return base_middlewares_.post_handle(req, resp);
     }
 
 private:
