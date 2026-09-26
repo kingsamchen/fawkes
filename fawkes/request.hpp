@@ -25,6 +25,7 @@ namespace http = boost::beast::http;
 class request {
 public:
     using impl_type = http::request<http::string_body>;
+    using header_type = impl_type::header_type;
 
     request() = default;
 

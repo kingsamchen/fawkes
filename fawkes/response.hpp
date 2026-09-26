@@ -25,6 +25,7 @@ namespace http = boost::beast::http;
 class response {
 public:
     using impl_type = http::response<http::string_body>;
+    using header_type = impl_type::header_type;
 
     response() = default;
 
