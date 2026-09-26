@@ -34,4 +34,17 @@ io_thread_pool::io_thread_pool(std::size_t num_threads) {
     }
 }
 
+void io_thread_pool::stop() noexcept {
+    for (std::size_t i = 0; i < pool_.size(); ++i) {
+        try {
+            pool_[i].io_ctx_ptr->stop();
+        } catch (const std::exception& ex) {
+            SPDLOG_ERROR("Unhandled exception while stopping io_thread_pool context {}; what={}",
+                         i, ex.what());
+        } catch (...) {
+            SPDLOG_ERROR("Unknown exception while stopping io_thread_pool context {}", i);
+        }
+    }
+}
+
 } // namespace fawkes
