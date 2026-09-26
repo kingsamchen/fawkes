@@ -21,7 +21,7 @@ namespace fawkes {
 // Forward declaration for concepts.
 class request;
 
-enum class middleware_result : std::uint8_t {
+enum class [[nodiscard]] middleware_result : std::uint8_t {
     abort,
     proceed,
 };
@@ -214,8 +214,9 @@ public:
         };
     }
 
-    [[nodiscard]] asio::awaitable<middleware_result> run(
-        request& req, response& resp, const route_handler_t& inner_handler) const {
+    asio::awaitable<middleware_result> run(request& req,
+                                           response& resp,
+                                           const route_handler_t& inner_handler) const {
         if (!mws_runner_) {
             return inner_handler(req, resp);
         }
