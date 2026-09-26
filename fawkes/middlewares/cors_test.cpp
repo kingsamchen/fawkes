@@ -14,7 +14,6 @@
 
 #include "fawkes/middleware.hpp"
 #include "fawkes/middlewares/cors.hpp"
-#include "test_utils/stringification.hpp" // IWYU pragma: keep
 
 namespace {
 
