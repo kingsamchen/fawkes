@@ -404,7 +404,8 @@ TEST_CASE("Post exception continues middleware unwind") {
     fawkes::request req;
     fawkes::response resp;
 
-    CHECK_THROWS_AS(run_middleware_chain(ioc, mc, req, resp), std::runtime_error);
+    CHECK_THROWS_AS(boost::ignore_unused(run_middleware_chain(ioc, mc, req, resp)),
+                    std::runtime_error);
     CHECK_EQ(resp.status(), http::status::internal_server_error);
     const std::vector<std::string> expected_trace{
         "A.pre", "B.pre", "C.pre", "C.post", "B.post", "A.post"};
