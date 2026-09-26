@@ -14,8 +14,6 @@
 #include "fawkes/request.hpp"
 #include "fawkes/tree.hpp"
 
-#include "test_utils/stringification.hpp" // IWYU pragma: keep
-
 namespace asio = boost::asio;
 
 namespace fawkes {
