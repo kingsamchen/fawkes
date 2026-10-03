@@ -25,11 +25,15 @@ namespace {
 namespace asio = boost::asio;
 namespace http = boost::beast::http;
 
+fawkes::conn_info dummy_conn_info() {
+    return fawkes::conn_info{};
+}
+
 fawkes::request make_request(http::verb method, std::string_view target) {
     fawkes::request::impl_type raw;
     raw.method(method);
     raw.target(target);
-    return fawkes::request(std::move(raw));
+    return fawkes::request(std::move(raw), dummy_conn_info());
 }
 
 TEST_SUITE_BEGIN("Routes");

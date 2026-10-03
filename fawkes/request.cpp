@@ -15,8 +15,9 @@
 
 namespace fawkes {
 
-request::request(impl_type&& req_impl)
-    : impl_(std::move(req_impl)) {
+request::request(impl_type&& req_impl, conn_info&& info)
+    : conn_info_(std::move(info)),
+      impl_(std::move(req_impl)) {
     const auto target = impl_.target();
     const auto pos = target.find('?');
     const auto path = target.substr(0, pos);

@@ -24,19 +24,35 @@ auto fake_handler() {
     };
 }
 
+fawkes::conn_info dummy_conn_info() {
+    return fawkes::conn_info{};
+}
+
 fawkes::request make_request(http::verb method, std::string_view target) {
     fawkes::request::impl_type raw;
     raw.method(method);
     raw.target(target);
-    return fawkes::request(std::move(raw));
+    return fawkes::request(std::move(raw), dummy_conn_info());
 }
 
 TEST_SUITE_BEGIN("HTTP Request");
 
+TEST_CASE("Carries connection endpoints") {
+    const asio::ip::tcp::endpoint local(asio::ip::address_v4::loopback(), 8080);
+    const asio::ip::tcp::endpoint remote(asio::ip::address_v4::loopback(), 12345);
+
+    fawkes::request::impl_type raw_req;
+    raw_req.target("/");
+    const fawkes::request req(std::move(raw_req), {.local = local, .remote = remote});
+
+    CHECK_EQ(req.local_endpoint(), local);
+    CHECK_EQ(req.remote_endpoint(), remote);
+}
+
 TEST_CASE("Percent-decode path automatically") {
     fawkes::request::impl_type raw_req;
     raw_req.target("/search%26query?foobar");
-    const fawkes::request req(std::move(raw_req));
+    const fawkes::request req(std::move(raw_req), dummy_conn_info());
     CHECK_EQ(req.as_impl().target(), "/search%26query?foobar");
     CHECK_EQ(req.path(), "/search&query");
 
@@ -48,14 +64,15 @@ TEST_CASE("Percent-decode path automatically") {
 TEST_CASE("Throws when path part is invalid") {
     fawkes::request::impl_type raw_req;
     raw_req.target("/search%GAery?foobar"); // %GA is illegal
-    CHECK_THROWS_AS(const fawkes::request req(std::move(raw_req)), std::invalid_argument);
+    CHECK_THROWS_AS(const fawkes::request req(std::move(raw_req), dummy_conn_info()),
+                    std::invalid_argument);
 }
 
 TEST_CASE("No throw if only query string part is invalid") {
     fawkes::request::impl_type raw_req;
     raw_req.target("/search%26query?foobar=%GA"); // %GA is illegal
     std::optional<fawkes::request> or_req;
-    REQUIRE_NOTHROW(or_req.emplace(std::move(raw_req)));
+    REQUIRE_NOTHROW(or_req.emplace(std::move(raw_req), dummy_conn_info()));
     REQUIRE(or_req.has_value());
     CHECK_EQ(or_req->path(), "/search&query");
 
@@ -71,7 +88,7 @@ TEST_CASE("No throw if only query string part is invalid") {
 TEST_CASE("Query parameters operations") {
     fawkes::request::impl_type raw_req;
     raw_req.target("/search%26query?key%2B1=hello%20world&key%2B2=&key%2B3&");
-    const fawkes::request req(std::move(raw_req));
+    const fawkes::request req(std::move(raw_req), dummy_conn_info());
 
     SUBCASE("key+1 has explicit value") {
         auto val1 = req.queries().get("key+1");

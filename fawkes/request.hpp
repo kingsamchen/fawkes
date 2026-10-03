@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 
+#include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/http/field.hpp>
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/string_body.hpp>
@@ -19,8 +20,14 @@
 
 namespace fawkes {
 
+namespace asio = boost::asio;
 namespace urls = boost::urls;
 namespace http = boost::beast::http;
+
+struct conn_info {
+    asio::ip::tcp::endpoint local;
+    asio::ip::tcp::endpoint remote;
+};
 
 class request {
 public:
@@ -30,7 +37,7 @@ public:
     request() = default;
 
     // Throws `std::invalid_argument` if path part of the URL is invalid.
-    explicit request(impl_type&& req_impl);
+    request(impl_type&& req_impl, conn_info&& info);
 
     // Path part of a request target, any percent-escapes are decoded.
     [[nodiscard]] std::string_view path() const noexcept {
@@ -87,6 +94,14 @@ public:
         return impl_.body();
     }
 
+    [[nodiscard]] const asio::ip::tcp::endpoint& local_endpoint() const noexcept {
+        return conn_info_.local;
+    }
+
+    [[nodiscard]] const asio::ip::tcp::endpoint& remote_endpoint() const noexcept {
+        return conn_info_.remote;
+    }
+
     [[nodiscard]] const impl_type& as_impl() const noexcept {
         return impl_;
     }
@@ -96,6 +111,7 @@ public:
     }
 
 private:
+    conn_info conn_info_;
     impl_type impl_;
     urls::url url_;
     std::string path_; // Percent-decoded.

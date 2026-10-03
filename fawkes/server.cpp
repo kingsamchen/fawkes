@@ -189,7 +189,10 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
             stream.expires_after(opts_.serve_timeout - read_elapsed);
         }
 
-        auto resp = co_await handle_request(parser.release());
+        auto resp = co_await handle_request(
+            parser.release(),
+            conn_info{.local = stream.socket().local_endpoint(),
+                      .remote = stream.socket().remote_endpoint()});
         const bool keep_alive = resp.keep_alive();
 
         co_await beast::async_write(stream, std::move(resp));
@@ -203,13 +206,13 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
 }
 
 asio::awaitable<http::message_generator> server::handle_request(
-    http::request<http::string_body> req) const {
+    http::request<http::string_body> req, conn_info info) const {
     const auto http_ver = req.version();
     const auto keep_alive = req.keep_alive();
 
     response fwk_resp(http_ver, keep_alive);
     try {
-        request fwk_req(std::move(req));
+        request fwk_req(std::move(req), std::move(info));
         co_await router_.dispatch(fwk_req, fwk_resp);
     } catch (const std::invalid_argument& ex) {
         SPDLOG_ERROR("Unexpected invalid argument for the request; what={}", ex.what());
