@@ -4,9 +4,11 @@
 
 #pragma once
 
+#include <any>
 #include <concepts>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/http/field.hpp>
@@ -102,6 +104,30 @@ public:
         return conn_info_.remote;
     }
 
+    // Throws `std::bad_any_cast` if `T` does not match the type of the managed
+    // content, or the `ctx_` does not have a value.
+    template<typename T>
+    requires(!std::is_reference_v<T>)
+    [[nodiscard]] T& context_as() {
+        return std::any_cast<T&>(ctx_);
+    }
+
+    // Throws `std::bad_any_cast` if `T` does not match the type of the managed
+    // content, or the `ctx_` does not have a value.
+    template<typename T>
+    requires(!std::is_reference_v<T>)
+    [[nodiscard]] const T& context_as() const {
+        return std::any_cast<const T&>(ctx_);
+    }
+
+    [[nodiscard]] std::any& context() noexcept {
+        return ctx_;
+    }
+
+    [[nodiscard]] const std::any& context() const noexcept {
+        return ctx_;
+    }
+
     [[nodiscard]] const impl_type& as_impl() const noexcept {
         return impl_;
     }
@@ -116,6 +142,7 @@ private:
     urls::url url_;
     std::string path_; // Percent-decoded.
     path_params ps_;
+    std::any ctx_;
 };
 
 static_assert(std::is_nothrow_move_constructible_v<request> &&
