@@ -26,6 +26,7 @@
 #include <boost/beast/http/string_body.hpp>
 
 #include "fawkes/io_thread_pool.hpp"
+#include "fawkes/request.hpp"
 #include "fawkes/router.hpp"
 
 namespace fawkes {
@@ -195,7 +196,7 @@ private:
                                                       std::stop_token stop_token) const;
 
     [[nodiscard]] asio::awaitable<http::message_generator> handle_request(
-        http::request<http::string_body> req) const;
+        http::request<http::string_body> req, conn_info info) const;
 
     static void handle_session_error(const asio::ip::tcp::endpoint& remote,
                                      std::exception_ptr eptr);
