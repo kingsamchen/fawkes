@@ -13,6 +13,18 @@
 
 namespace fawkes {
 
+namespace {
+
+const route_handler_t default_not_found_handler = // NOLINT(bugprone-throwing-static-initialization)
+    [](request& /*req*/, response& resp) -> asio::awaitable<middleware_result> {
+    const json::object body{
+        {"error", json::object{{"message", "The requested resource was not found."}}}};
+    resp.json(http::status::not_found, json::serialize(body));
+    co_return middleware_result::proceed;
+};
+
+} // namespace
+
 const route_handler_t* router::locate_route(request& req) const {
     const auto tree_it = routes_.find(req.header().method());
     if (tree_it == routes_.end()) {
@@ -29,15 +41,8 @@ asio::awaitable<void> router::dispatch(request& req, response& resp) const {
         co_return;
     }
 
-    const route_handler_t not_found_handler =
-        [](request& /*not_found_req*/, response& not_found_resp)
-        -> asio::awaitable<middleware_result> {
-        const json::object body{
-            {"error", json::object{{"message", "Unknown resource"}}}};
-        not_found_resp.json(http::status::not_found, json::serialize(body));
-        co_return middleware_result::proceed;
-    };
-    boost::ignore_unused(co_await base_middlewares_.run(req, resp, not_found_handler));
+    const auto& not_found = not_found_handler_ ? not_found_handler_ : default_not_found_handler;
+    boost::ignore_unused(co_await base_middlewares_.run(req, resp, not_found));
     co_return;
 }
 

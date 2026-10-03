@@ -3,13 +3,13 @@
 // in the LICENSE file.
 
 #include <optional>
-#include <stdexcept>
 #include <string_view>
 #include <utility>
 
 #include <boost/asio/awaitable.hpp>
 #include <doctest/doctest.h>
 
+#include "fawkes/errors.hpp"
 #include "fawkes/request.hpp"
 #include "fawkes/router.hpp"
 
@@ -61,11 +61,19 @@ TEST_CASE("Percent-decode path automatically") {
     }
 }
 
-TEST_CASE("Throws when path part is invalid") {
+TEST_CASE("Invalid path throws invalid request target") {
     fawkes::request::impl_type raw_req;
-    raw_req.target("/search%GAery?foobar"); // %GA is illegal
-    CHECK_THROWS_AS(const fawkes::request req(std::move(raw_req), dummy_conn_info()),
-                    std::invalid_argument);
+    constexpr std::string_view invalid_target = "/search%GAery?foobar"; // %GA is illegal
+    raw_req.target(invalid_target);
+
+    bool caught = false;
+    try {
+        const fawkes::request req(std::move(raw_req), dummy_conn_info());
+    } catch (const fawkes::invalid_request_target& ex) {
+        caught = true;
+        CHECK_EQ(ex.target(), invalid_target);
+    }
+    CHECK(caught);
 }
 
 TEST_CASE("No throw if only query string part is invalid") {
