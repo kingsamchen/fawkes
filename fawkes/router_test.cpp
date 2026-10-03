@@ -59,6 +59,24 @@ TEST_CASE("Concept is_user_handler") {
     }
 }
 
+TEST_CASE("Router uses configured not-found handler") {
+    fawkes::router router;
+    router.set_not_found_handler(
+        [](const fawkes::request& /*req*/, fawkes::response& resp)
+            -> asio::awaitable<void> {
+            resp.text(http::status::not_found, std::string{"custom not found"});
+            co_return;
+        });
+    auto req = make_request(http::verb::get, "/no/such/path");
+    fawkes::response resp;
+    asio::io_context ioc;
+
+    test_util::run_awaitable_sync(ioc, router.dispatch(req, resp));
+
+    CHECK_EQ(resp.status_code(), 404U);
+    CHECK_EQ(resp.body(), "custom not found");
+}
+
 TEST_SUITE_END(); // Routes
 
 TEST_SUITE_BEGIN("Middleware");

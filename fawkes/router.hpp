@@ -5,6 +5,7 @@
 #pragma once
 
 #include <concepts>
+#include <cstddef>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
@@ -92,9 +93,27 @@ public:
         base_middlewares_.set(std::make_tuple(std::move(mws)...));
     }
 
+    // Use custom provided not-found handler.
+    template<is_user_handler H>
+    void set_not_found_handler(H&& handler) {
+        not_found_handler_ =
+            // NOLINTNEXTLINE(cppcoreguidelines-avoid-capturing-lambda-coroutines)
+            [h = std::forward<H>(handler)](request& req, response& resp)
+            -> asio::awaitable<middleware_result> {
+            co_await h(req, resp);
+            co_return middleware_result::proceed;
+        };
+    }
+
+    // Reset the handler.
+    void set_not_found_handler(std::nullptr_t) {
+        not_found_handler_ = nullptr;
+    }
+
 private:
     boost::unordered_flat_map<http::verb, node> routes_;
     middleware_chain base_middlewares_;
+    route_handler_t not_found_handler_;
 };
 
 static_assert(std::is_nothrow_move_constructible_v<router>);

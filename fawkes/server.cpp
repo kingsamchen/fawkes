@@ -8,8 +8,8 @@
 #include <exception>
 #include <functional>
 #include <source_location>
-#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include <boost/asio/as_tuple.hpp>
@@ -38,6 +38,7 @@
 #include <fmt/ostream.h>
 #include <spdlog/spdlog.h>
 
+#include "fawkes/errors.hpp"
 #include "fawkes/middleware.hpp"
 #include "fawkes/request.hpp"
 #include "fawkes/response.hpp"
@@ -214,8 +215,8 @@ asio::awaitable<http::message_generator> server::handle_request(
     try {
         request fwk_req(std::move(req), std::move(info));
         co_await router_.dispatch(fwk_req, fwk_resp);
-    } catch (const std::invalid_argument& ex) {
-        SPDLOG_ERROR("Unexpected invalid argument for the request; what={}", ex.what());
+    } catch (const invalid_request_target& ex) {
+        SPDLOG_ERROR("Invalid request target; what={} target={}", ex.what(), ex.target());
         const json::object body{
             {"error", json::object{{"message", "Invalid request"}}}};
         fwk_resp.json(http::status::bad_request, json::serialize(body));

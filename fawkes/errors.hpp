@@ -7,12 +7,27 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 #include <boost/beast/http/status.hpp>
 
 namespace fawkes {
 
 namespace http = boost::beast::http;
+
+class invalid_request_target : public std::invalid_argument {
+public:
+    invalid_request_target(const std::string& what, std::string_view target)
+        : std::invalid_argument(what),
+          target_(target) {}
+
+    [[nodiscard]] const std::string& target() const noexcept {
+        return target_;
+    }
+
+private:
+    std::string target_;
+};
 
 class http_error : public std::runtime_error {
 public:
