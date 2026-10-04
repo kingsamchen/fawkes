@@ -20,6 +20,7 @@
 #include <boost/asio/deferred.hpp>
 #include <boost/asio/detached.hpp>
 #include <boost/asio/error.hpp>
+#include <boost/asio/redirect_error.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/core/error.hpp>
 #include <boost/beast/core/string.hpp>
@@ -40,6 +41,7 @@
 
 #include "fawkes/errors.hpp"
 #include "fawkes/middleware.hpp"
+#include "fawkes/mime.hpp"
 #include "fawkes/request.hpp"
 #include "fawkes/response.hpp"
 
@@ -70,6 +72,27 @@ response::impl_type&& prepare_response(response& resp) {
     auto& impl = resp.as_impl();
     impl.prepare_payload();
     return std::move(impl);
+}
+
+response::impl_type make_content_too_large_response(unsigned int version) {
+    const json::object body{
+        {"error", json::object{{"message", "Request body too large"}}}};
+
+    response::impl_type resp(http::status::payload_too_large, version);
+    resp.keep_alive(false);
+    resp.set(http::field::content_type, mime::json);
+    resp.body() = json::serialize(body);
+    resp.prepare_payload();
+    return resp;
+}
+
+std::string_view safe_parser_content_length(const http::request_parser<http::string_body>& parser) {
+    // `content_length()` requires a completed header; body_limit can be reported before then.
+    const std::string_view raw = parser.get()[http::field::content_length];
+    if (raw.empty()) {
+        return "unknown";
+    }
+    return raw;
 }
 
 void set_body_limit(http::request_parser<http::string_body>& parser, const server::options& opts) {
@@ -145,6 +168,7 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
     // can stream still be usable in this case?
     for (;;) {
         http::request_parser<http::string_body> parser;
+        set_body_limit(parser, opts_);
 
         if (opts_.idle_timeout > 0ms) {
             stream.expires_after(opts_.idle_timeout);
@@ -165,12 +189,35 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
         boost::system::error_code ec;
         const auto bytes_consumed = parser.put(buf.data(), ec);
         if (ec && ec != http::error::need_more) {
-            throw std::system_error(ec);
+            if (ec == http::error::body_limit) {
+                SPDLOG_ERROR("Failed to serve the request because body limit exceeded; "
+                             "method={} target={} content_length={}",
+                             parser.get().method_string(),
+                             parser.get().target(),
+                             safe_parser_content_length(parser));
+                auto resp = make_content_too_large_response(parser.get().version());
+                co_await http::async_write(stream, resp);
+                break;
+            }
+            throw boost::system::system_error(ec);
         }
         buf.consume(bytes_consumed);
 
         if (!parser.is_header_done()) {
-            co_await http::async_read_header(stream, buf, parser);
+            co_await http::async_read_header(stream, buf, parser, asio::redirect_error(ec));
+            if (ec) {
+                if (ec == http::error::body_limit) {
+                    SPDLOG_ERROR("Failed to serve the request because body limit exceeded; "
+                                 "method={} target={} content_length={}",
+                                 parser.get().method_string(),
+                                 parser.get().target(),
+                                 safe_parser_content_length(parser));
+                    auto resp = make_content_too_large_response(parser.get().version());
+                    co_await http::async_write(stream, resp);
+                    break;
+                }
+                throw boost::system::system_error(ec);
+            }
         }
 
         if (beast::iequals(parser.get()[http::field::expect], expect_value)) {
@@ -181,8 +228,20 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
 
         // Read the body.
         if (!parser.is_done()) {
-            set_body_limit(parser, opts_);
-            co_await http::async_read(stream, buf, parser);
+            co_await http::async_read(stream, buf, parser, asio::redirect_error(ec));
+            if (ec) {
+                if (ec == http::error::body_limit) {
+                    SPDLOG_ERROR("Failed to serve the request because body limit exceeded; "
+                                 "method={} target={} content_length={}",
+                                 parser.get().method_string(),
+                                 parser.get().target(),
+                                 safe_parser_content_length(parser));
+                    auto resp = make_content_too_large_response(parser.get().version());
+                    co_await http::async_write(stream, resp);
+                    break;
+                }
+                throw boost::system::system_error(ec);
+            }
         }
 
         if (opts_.serve_timeout > 0ms) {

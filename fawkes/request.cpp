@@ -32,9 +32,10 @@ request::request(impl_type&& req_impl, conn_info&& info)
 
     if (pos != std::string_view::npos) {
         // Discard whole query string if it is malformed.
-        const auto or_query = urls::parse_query(target.substr(pos + 1));
+        const auto raw_query = target.substr(pos + 1);
+        const auto or_query = urls::parse_query(raw_query);
         if (or_query.has_error()) {
-            SPDLOG_ERROR("malformed query string discarded");
+            SPDLOG_ERROR("malformed query string discarded; query={}", raw_query);
         } else {
             url_.encoded_params().assign(or_query->begin(), or_query->end());
         }
