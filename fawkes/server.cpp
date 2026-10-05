@@ -41,7 +41,6 @@
 
 #include "fawkes/errors.hpp"
 #include "fawkes/middleware.hpp"
-#include "fawkes/mime.hpp"
 #include "fawkes/request.hpp"
 #include "fawkes/response.hpp"
 
@@ -70,6 +69,7 @@ auto make_no_fail(F&& fn, std::source_location loc = std::source_location::curre
 
 response::impl_type&& prepare_response(response& resp) {
     auto& impl = resp.as_impl();
+    impl.set(http::field::x_content_type_options, "nosniff");
     impl.prepare_payload();
     return std::move(impl);
 }
@@ -78,12 +78,9 @@ response::impl_type make_content_too_large_response(unsigned int version) {
     const json::object body{
         {"error", json::object{{"message", "Request body too large"}}}};
 
-    response::impl_type resp(http::status::payload_too_large, version);
-    resp.keep_alive(false);
-    resp.set(http::field::content_type, mime::json);
-    resp.body() = json::serialize(body);
-    resp.prepare_payload();
-    return resp;
+    response resp(version, false);
+    resp.json(http::status::payload_too_large, json::serialize(body));
+    return prepare_response(resp);
 }
 
 std::string_view safe_parser_content_length(const http::request_parser<http::string_body>& parser) {
