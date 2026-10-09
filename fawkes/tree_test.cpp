@@ -617,6 +617,35 @@ TEST_CASE("Locate wildcard path") {
     }
 }
 
+TEST_CASE("Same-length unregistered path does not match static route") {
+    SUBCASE("root node") {
+        fawkes::node tree;
+        tree.add_route("/zscheduler/health", fake_handler());
+
+        fawkes::path_params params;
+        CHECK_EQ(tree.locate("/zscheduler/healtx", params), nullptr);
+        CHECK_EQ(params, fawkes::path_params{});
+    }
+
+    SUBCASE("child node") {
+        fawkes::node tree;
+        tree.add_route("/items/abc", fake_handler());
+        tree.add_route("/items/xyz", fake_handler());
+
+        fawkes::path_params params;
+        CHECK_EQ(tree.locate("/items/axy", params), nullptr);
+        CHECK_EQ(params, fawkes::path_params{});
+    }
+
+    SUBCASE("child node after param") {
+        fawkes::node tree;
+        tree.add_route("/users/:id/profile", fake_handler());
+
+        fawkes::path_params params;
+        CHECK_EQ(tree.locate("/users/42/profilx", params), nullptr);
+    }
+}
+
 TEST_SUITE_END(); // Router
 
 } // namespace
