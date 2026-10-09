@@ -19,7 +19,7 @@
 namespace fawkes {
 
 const route_handler_t* node::locate(std::string_view path, path_params& ps) const {
-    if (path.size() == path_.size()) {
+    if (path == path_) {
         return handler_ ? &handler_ : nullptr;
     }
 
