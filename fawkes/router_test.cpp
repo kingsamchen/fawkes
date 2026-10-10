@@ -36,6 +36,15 @@ fawkes::request make_request(http::verb method, std::string_view target) {
     return fawkes::request(std::move(raw), dummy_conn_info());
 }
 
+auto tagged_handler(std::string tag) {
+    // NOLINTNEXTLINE(*-avoid-capturing-lambda-coroutines)
+    return [tag = std::move(tag)](const fawkes::request& /*req*/,
+                                  fawkes::response& resp) -> asio::awaitable<void> {
+        resp.text(http::status::ok, tag);
+        co_return;
+    };
+}
+
 TEST_SUITE_BEGIN("Routes");
 
 TEST_CASE("Type trait is_asio_awaitable") {
@@ -57,6 +66,80 @@ TEST_CASE("Concept is_user_handler") {
         };
         static_assert(!fawkes::is_user_handler<decltype(hd)>);
     }
+}
+
+TEST_CASE("Router falls back to GET route for HEAD requests") {
+    fawkes::router router;
+    router.add_route(http::verb::get, "/items/:id", tagged_handler("get"));
+    auto req = make_request(http::verb::head, "/items/42");
+    fawkes::response resp;
+    asio::io_context ioc;
+
+    test_util::run_awaitable_sync(ioc, router.dispatch(req, resp));
+
+    CHECK_EQ(req.params().get("id"), "42");
+    CHECK_EQ(resp.status(), http::status::ok);
+    CHECK_EQ(resp.body(), "get");
+}
+
+TEST_CASE("Router prefers HEAD route over GET fallback") {
+    fawkes::router router;
+    router.add_route(http::verb::get, "/items", tagged_handler("get"));
+    router.add_route(http::verb::head, "/items", tagged_handler("head"));
+    auto req = make_request(http::verb::head, "/items");
+    fawkes::response resp;
+    asio::io_context ioc;
+
+    test_util::run_awaitable_sync(ioc, router.dispatch(req, resp));
+
+    CHECK_EQ(resp.body(), "head");
+}
+
+TEST_CASE("HEAD does not fall back to non-GET routes") {
+    fawkes::router router;
+    router.add_route(http::verb::post, "/submit", tagged_handler("post"));
+
+    auto req = make_request(http::verb::head, "/submit");
+    CHECK_EQ(router.locate_route(req), nullptr);
+}
+
+TEST_CASE("GET handler serving HEAD fallback sees HEAD method") {
+    http::verb seen_method = http::verb::unknown;
+    fawkes::router router;
+    router.add_route(
+        http::verb::get,
+        "/items",
+        // NOLINTNEXTLINE(*-avoid-capturing-lambda-coroutines)
+        [&seen_method](const fawkes::request& req,
+                       fawkes::response& resp) -> asio::awaitable<void> {
+            seen_method = req.header().method();
+            resp.text(http::status::ok, std::string{"items"});
+            co_return;
+        });
+    auto req = make_request(http::verb::head, "/items");
+    fawkes::response resp;
+    asio::io_context ioc;
+
+    test_util::run_awaitable_sync(ioc, router.dispatch(req, resp));
+
+    CHECK_EQ(seen_method, http::verb::head);
+    CHECK_EQ(resp.status(), http::status::ok);
+    CHECK_EQ(resp.body(), "items");
+}
+
+TEST_CASE("Failed HEAD match does not leave params in GET fallback") {
+    fawkes::router router;
+    router.add_route(http::verb::head, "/users/:head_id/profile", tagged_handler("head"));
+    router.add_route(http::verb::get, "/users/:id/settings", tagged_handler("get"));
+    auto req = make_request(http::verb::head, "/users/42/settings");
+    fawkes::response resp;
+    asio::io_context ioc;
+
+    test_util::run_awaitable_sync(ioc, router.dispatch(req, resp));
+
+    CHECK_EQ(resp.body(), "get");
+    CHECK_EQ(req.params().get("id"), "42");
+    CHECK_FALSE(req.params().try_get("head_id").has_value());
 }
 
 TEST_CASE("Router uses configured not-found handler") {

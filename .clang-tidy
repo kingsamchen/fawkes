@@ -40,6 +40,8 @@ Checks: >
   -readability-identifier-length,
 
 WarningsAsErrors: '*'
+ExtraArgs:
+  - '-Wno-missing-designated-field-initializers'
 HeaderFileExtensions:         ['h','hh','hpp','hxx']
 ImplementationFileExtensions: ['c','cc','cpp','cxx']
 HeaderFilterRegex: '.*[/\\](fawkes|examples)[/\\].*'

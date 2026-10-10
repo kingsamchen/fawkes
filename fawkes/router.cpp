@@ -4,6 +4,8 @@
 
 #include "fawkes/router.hpp"
 
+#include <string_view>
+#include <tuple>
 #include <utility>
 
 #include <boost/beast/http/status.hpp>
@@ -26,12 +28,28 @@ const route_handler_t default_not_found_handler = // NOLINT(bugprone-throwing-st
 } // namespace
 
 const route_handler_t* router::locate_route(request& req) const {
-    const auto tree_it = routes_.find(req.header().method());
-    if (tree_it == routes_.end()) {
-        return nullptr;
+    const auto locator = [](http::verb method, std::string_view path, const auto& routes)
+        -> std::tuple<const route_handler_t*, path_params> {
+        path_params ps;
+        const auto tree_it = routes.find(method);
+        if (tree_it == routes.end()) {
+            return std::make_tuple(nullptr, std::move(ps));
+        }
+        return std::make_tuple(tree_it->second.locate(path, ps), std::move(ps));
+    };
+
+    const auto method = req.header().method();
+    const auto path = req.path();
+
+    auto [handler, ps] = locator(method, path, routes_);
+
+    // Fallback to the GET route, if possible.
+    if (!handler && method == http::verb::head) {
+        std::tie(handler, ps) = locator(http::verb::get, path, routes_);
     }
 
-    return tree_it->second.locate(req.path(), req.params());
+    req.params() = std::move(ps);
+    return handler;
 }
 
 asio::awaitable<void> router::dispatch(request& req, response& resp) const {

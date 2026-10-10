@@ -24,9 +24,11 @@
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/message_generator.hpp>
 #include <boost/beast/http/string_body.hpp>
+#include <boost/beast/http/verb.hpp>
 
 #include "fawkes/io_thread_pool.hpp"
 #include "fawkes/request.hpp"
+#include "fawkes/response.hpp"
 #include "fawkes/router.hpp"
 
 namespace fawkes {
@@ -34,6 +36,12 @@ namespace fawkes {
 namespace asio = boost::asio;
 namespace beast = boost::beast;
 namespace http = boost::beast::http;
+
+namespace detail {
+
+http::message_generator prepare_response(http::verb method, response& resp);
+
+} // namespace detail
 
 class server {
 public:
