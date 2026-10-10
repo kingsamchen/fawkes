@@ -51,6 +51,7 @@ namespace json = boost::json;
 namespace {
 
 constexpr std::string_view expect_value = "100-continue";
+constexpr unsigned int http_version_1_1 = 11;
 
 template<typename F>
 auto make_no_fail(F&& fn, std::source_location loc = std::source_location::current()) {
@@ -67,25 +68,18 @@ auto make_no_fail(F&& fn, std::source_location loc = std::source_location::curre
     };
 }
 
-response::impl_type&& prepare_response(response& resp) {
-    auto& impl = resp.as_impl();
-    impl.set(http::field::x_content_type_options, "nosniff");
-    impl.prepare_payload();
-    return std::move(impl);
-}
-
-response::impl_type make_content_too_large_response(unsigned int version) {
+http::message_generator make_content_too_large_response(unsigned int version, http::verb method) {
     const json::object body{
         {"error", json::object{{"message", "Request body too large"}}}};
 
     response resp(version, false);
     resp.json(http::status::payload_too_large, json::serialize(body));
-    return prepare_response(resp);
+    return detail::prepare_response(method, resp);
 }
 
-std::string_view safe_parser_content_length(const http::request_parser<http::string_body>& parser) {
+std::string_view safe_request_content_length(const http::request<http::string_body>& request) {
     // `content_length()` requires a completed header; body_limit can be reported before then.
-    const std::string_view raw = parser.get()[http::field::content_length];
+    const std::string_view raw = request[http::field::content_length];
     if (raw.empty()) {
         return "unknown";
     }
@@ -105,6 +99,49 @@ void set_body_limit(http::request_parser<http::string_body>& parser, const serve
 }
 
 } // namespace
+
+namespace detail {
+
+http::message_generator prepare_response(http::verb method, response& resp) {
+    auto& impl = resp.as_impl();
+
+    impl.set(http::field::x_content_type_options, "nosniff");
+
+    // RFC says this response cannot even contain the `Content-Length` header.
+    if (impl.result() == http::status::no_content) {
+        impl.erase(http::field::content_length);
+        impl.erase(http::field::transfer_encoding);
+        impl.erase(http::field::trailer);
+        return http::response<http::empty_body>(std::move(impl.base()));
+    }
+
+    // Remove the `Content-Length` header to prevent the handler setting a wrong value.
+    if (impl.result() == http::status::not_modified) {
+        impl.erase(http::field::content_length);
+        impl.erase(http::field::content_type);
+        impl.erase(http::field::transfer_encoding);
+        impl.erase(http::field::trailer);
+        return http::response<http::empty_body>(std::move(impl.base()));
+    }
+
+    // If the body has been generated anyway, we set the `Content-Length` header,
+    // but discard the body.
+    if (method == http::verb::head) {
+        impl.erase(http::field::transfer_encoding);
+        impl.erase(http::field::trailer);
+
+        if (!impl.body().empty()) {
+            impl.content_length(impl.body().size());
+        }
+
+        return http::response<http::empty_body>(std::move(impl.base()));
+    }
+
+    impl.prepare_payload();
+    return std::move(impl);
+}
+
+} // namespace detail
 
 void server::listen_and_serve(const std::string& addr, std::uint16_t port) {
     const auto endpoint = asio::ip::tcp::endpoint(asio::ip::make_address(addr), port);
@@ -187,13 +224,14 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
         const auto bytes_consumed = parser.put(buf.data(), ec);
         if (ec && ec != http::error::need_more) {
             if (ec == http::error::body_limit) {
+                const auto& req = parser.get();
                 SPDLOG_ERROR("Failed to serve the request because body limit exceeded; "
                              "method={} target={} content_length={}",
-                             parser.get().method_string(),
-                             parser.get().target(),
-                             safe_parser_content_length(parser));
-                auto resp = make_content_too_large_response(parser.get().version());
-                co_await http::async_write(stream, resp);
+                             req.method_string(),
+                             req.target(),
+                             safe_request_content_length(req));
+                auto resp = make_content_too_large_response(req.version(), req.method());
+                co_await beast::async_write(stream, std::move(resp));
                 break;
             }
             throw boost::system::system_error(ec);
@@ -204,20 +242,22 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
             co_await http::async_read_header(stream, buf, parser, asio::redirect_error(ec));
             if (ec) {
                 if (ec == http::error::body_limit) {
+                    const auto& req = parser.get();
                     SPDLOG_ERROR("Failed to serve the request because body limit exceeded; "
                                  "method={} target={} content_length={}",
-                                 parser.get().method_string(),
-                                 parser.get().target(),
-                                 safe_parser_content_length(parser));
-                    auto resp = make_content_too_large_response(parser.get().version());
-                    co_await http::async_write(stream, resp);
+                                 req.method_string(),
+                                 req.target(),
+                                 safe_request_content_length(req));
+                    auto resp = make_content_too_large_response(req.version(), req.method());
+                    co_await beast::async_write(stream, std::move(resp));
                     break;
                 }
                 throw boost::system::system_error(ec);
             }
         }
 
-        if (beast::iequals(parser.get()[http::field::expect], expect_value)) {
+        if (parser.get().version() == http_version_1_1 &&
+            beast::iequals(parser.get()[http::field::expect], expect_value)) {
             const http::response<http::empty_body> continue_resp{http::status::continue_,
                                                                  parser.get().version()};
             co_await http::async_write(stream, continue_resp);
@@ -228,13 +268,14 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
             co_await http::async_read(stream, buf, parser, asio::redirect_error(ec));
             if (ec) {
                 if (ec == http::error::body_limit) {
+                    const auto& req = parser.get();
                     SPDLOG_ERROR("Failed to serve the request because body limit exceeded; "
                                  "method={} target={} content_length={}",
-                                 parser.get().method_string(),
-                                 parser.get().target(),
-                                 safe_parser_content_length(parser));
-                    auto resp = make_content_too_large_response(parser.get().version());
-                    co_await http::async_write(stream, resp);
+                                 req.method_string(),
+                                 req.target(),
+                                 safe_request_content_length(req));
+                    auto resp = make_content_too_large_response(req.version(), req.method());
+                    co_await beast::async_write(stream, std::move(resp));
                     break;
                 }
                 throw boost::system::system_error(ec);
@@ -264,6 +305,7 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
 
 asio::awaitable<http::message_generator> server::handle_request(
     http::request<http::string_body> req, conn_info info) const {
+    const auto method = req.method();
     const auto http_ver = req.version();
     const auto keep_alive = req.keep_alive();
 
@@ -288,7 +330,7 @@ asio::awaitable<http::message_generator> server::handle_request(
         fwk_resp.json(http::status::internal_server_error, json::serialize(body));
     }
 
-    co_return prepare_response(fwk_resp);
+    co_return detail::prepare_response(method, fwk_resp);
 }
 
 // static

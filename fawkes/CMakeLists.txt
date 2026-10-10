@@ -86,6 +86,7 @@ target_sources(fawkes_tests
     request_test.cpp
     router_test.cpp
     server_options_test.cpp
+    server_prepare_response_test.cpp
     tree_test.cpp
 )
 
