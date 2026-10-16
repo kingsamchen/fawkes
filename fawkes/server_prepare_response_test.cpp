@@ -2,6 +2,8 @@
 // This file is subject to the terms of license that can be found
 // in the LICENSE file.
 
+#include <chrono>
+#include <iterator>
 #include <string>
 #include <utility>
 #include <vector>
@@ -19,6 +21,7 @@
 #include <boost/beast/http/verb.hpp>
 #include <doctest/doctest.h>
 
+#include "fawkes/cookie.hpp"
 #include "fawkes/mime.hpp"
 #include "fawkes/response.hpp"
 #include "fawkes/server.hpp"
@@ -87,6 +90,42 @@ TEST_CASE("GET response sends body with Content-Length") {
     CHECK_EQ(out.header[http::field::x_content_type_options], "nosniff");
     CHECK_EQ(out.payload, "hello");
     CHECK(out.keep_alive);
+}
+
+TEST_CASE("Set-Cookie fields survive response preparation and serialization") {
+    using namespace std::chrono_literals;
+
+    struct response_case {
+        http::verb method;
+        http::status status;
+    };
+
+    constexpr response_case cases[] = {
+        {.method = http::verb::get, .status = http::status::ok},
+        {.method = http::verb::head, .status = http::status::ok},
+        {.method = http::verb::get, .status = http::status::no_content},
+        {.method = http::verb::get, .status = http::status::not_modified},
+    };
+
+    for (const auto& test : cases) {
+        CAPTURE(test.method);
+        CAPTURE(test.status);
+        auto resp = make_text_response(test.status, "hello");
+        fawkes::cookie session("sid", "YWJjZA==");
+        session.path = "/";
+        session.expires = std::chrono::sys_days{2025y / 12 / 12};
+        resp.add_set_cookie(session);
+        resp.add_set_cookie(fawkes::cookie("value", "a+b/%2F"));
+
+        const auto out = write_out(fawkes::detail::prepare_response(test.method, resp));
+
+        auto [begin, end] = out.header.equal_range(http::field::set_cookie);
+        REQUIRE_EQ(std::distance(begin, end), 2);
+        CHECK_EQ(begin->value(),
+                 "sid=YWJjZA==; Path=/; Expires=Fri, 12 Dec 2025 00:00:00 GMT");
+        ++begin;
+        CHECK_EQ(begin->value(), "value=a+b/%2F");
+    }
 }
 
 TEST_CASE("HEAD response drops body and sets Content-Length from body") {

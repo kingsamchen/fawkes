@@ -14,14 +14,14 @@ jobs:
 
     strategy:
       matrix:
-        cxx: [g++-13, g++-14, g++-15]
+        cxx: [g++-14, g++-15, g++-16]
         include:
-          - cxx: g++-13
-            install: sudo apt install -y g++-13
           - cxx: g++-14
             install: sudo apt install -y g++-14
           - cxx: g++-15
             install: sudo apt install -y g++-15
+          - cxx: g++-16
+            install: sudo apt install -y g++-16
 
     env:
       VCPKG_ROOT: "/usr/local/share/vcpkg"

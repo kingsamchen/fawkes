@@ -5,18 +5,14 @@
 #include "fawkes/cookie.hpp"
 
 #include <algorithm>
+#include <expected>
 #include <string>
 #include <string_view>
-#include <vector>
+#include <utility>
 
 #include <absl/strings/ascii.h>
 #include <absl/strings/str_split.h>
-#include <boost/url/authority_view.hpp>
-#include <boost/url/decode_view.hpp>
-#include <boost/url/encode.hpp>
 #include <boost/url/grammar.hpp>
-#include <boost/url/rfc/pct_encoded_rule.hpp>
-#include <boost/url/rfc/unreserved_chars.hpp>
 #include <fmt/chrono.h>
 #include <spdlog/spdlog.h>
 
@@ -35,6 +31,15 @@ bool is_token(std::string_view str) {
     return urls::grammar::parse(str, urls::grammar::token_rule(token_chars)).has_value();
 }
 
+bool valid_cookie_value(std::string_view value) noexcept {
+    // cookie-octet = %x21 / %x23-2B / %x2D-3A / %x3C-5B / %x5D-7E
+    // lut_chars will be optimized into a lookup table at compile time.
+    static constexpr auto cookie_octets = urls::grammar::lut_chars([](char ch) noexcept {
+        return 0x21 <= ch && ch <= 0x7E && ch != '"' && ch != ',' && ch != ';' && ch != '\\';
+    });
+    return std::ranges::all_of(value, cookie_octets);
+}
+
 bool valid_cookie_path_value(std::string_view value) noexcept {
     return std::ranges::all_of(value, [](unsigned char ch) noexcept {
         return 0x20 <= ch && ch < 0x7F && ch != ';';
@@ -42,55 +47,83 @@ bool valid_cookie_path_value(std::string_view value) noexcept {
 }
 
 bool valid_cookie_domain(std::string_view domain) noexcept {
-    return urls::parse_authority(domain).has_value();
+    constexpr std::size_t max_domain_length = 253;
+    constexpr std::size_t max_label_length = 63;
+    if (domain.empty() || domain.size() > max_domain_length) {
+        return false;
+    }
+
+    std::size_t label_length = 0;
+    bool label_ends_with_alnum = false;
+    for (const char ch : domain) {
+        const bool is_alnum = absl::ascii_isalnum(static_cast<unsigned char>(ch));
+        if (is_alnum) {
+            if (++label_length > max_label_length) {
+                return false;
+            }
+            label_ends_with_alnum = true;
+        } else if (ch == '.') {
+            if (label_length == 0 || !label_ends_with_alnum) {
+                return false;
+            }
+            label_length = 0;
+            label_ends_with_alnum = false;
+        } else if (ch == '-' && label_length != 0) {
+            if (++label_length > max_label_length) {
+                return false;
+            }
+            label_ends_with_alnum = false;
+        } else {
+            return false;
+        }
+    }
+    return label_length != 0 && label_ends_with_alnum;
 }
 
 bool valid_expires(std::chrono::sys_seconds expires) noexcept {
     using namespace std::chrono_literals;
-    const auto ymd = std::chrono::year_month_day{std::chrono::floor<std::chrono::days>(expires)};
-    // As per RFC, the year must not be less than 1601.
-    return ymd.ok() && ymd.year() >= 1601y; // NOLINT(readability-magic-numbers)
+    constexpr std::chrono::sys_seconds min_expires = std::chrono::sys_days{1601y / 1 / 1};
+    // Convert to seconds first; hours and minutes may use 32-bit counts on some implementations.
+    constexpr std::chrono::sys_seconds max_expires =
+        std::chrono::sys_seconds{std::chrono::sys_days{9999y / 12 / 31}} + 23h + 59min + 59s;
+    // As per RFC, the year must not be less than 1601; we also add a upper bound year check
+    // to make it more reasonable.
+    return min_expires <= expires && expires <= max_expires;
 }
 
 } // namespace
 
 void cookie_view::parse_cookie_value(std::string_view cookie_value) {
-    static constexpr std::string_view empty_value;
-
     auto pairs = absl::StrSplit(cookie_value, ';', absl::SkipEmpty{});
     for (auto p : pairs) {
         const auto trimmed = absl::StripAsciiWhitespace(p);
-        std::vector<std::string_view> fields = absl::StrSplit(trimmed, '=');
-        // Must be `key=value`, while the `value` is allowed to be empty but the `name` can't
-        // be empty.
-        if (fields.size() > 2 || fields.empty() || fields[0].empty()) {
+        // Cookie value may contain `=`.
+        std::pair<std::string_view, std::string_view> fields =
+            absl::StrSplit(trimmed, absl::MaxSplits('=', 1));
+        auto& [name, value] = fields;
+        if (name.empty()) {
             SPDLOG_WARN("Malformed cookie entry, skipped; cookie={}", trimmed);
             continue;
         }
 
-        // Strictly, RFC doesn't allow an empty value without `=`, however a lot of popular
-        // frameworks choose to support this case.
-        if (fields.size() == 1) {
-            fields.emplace_back(empty_value);
-        }
-
-        if (!is_token(fields[0])) {
-            SPDLOG_WARN("Name of the cookie entry is not a http token, skipped; name={}",
-                        fields[0]);
+        if (!is_token(name)) {
+            SPDLOG_WARN("Name of the cookie entry is not a http token, skipped; name={}", name);
             continue;
         }
 
-        // `urls::pct_string_view` has a rather relaxed parsing rule that would allow characters
-        // like whitespace.
-        if (urls::grammar::parse(fields[1], urls::pct_encoded_rule(urls::unreserved_chars))
-                .has_error()) {
-            SPDLOG_WARN("Invalid value of the cookie entry, skipped; {}={}", fields[0], fields[1]);
+        // Remove surrounding quotes.
+        if (value.size() >= 2 && value.starts_with('"') && value.ends_with('"')) {
+            value.remove_prefix(1);
+            value.remove_suffix(1);
+        }
+
+        if (!valid_cookie_value(value)) {
+            SPDLOG_WARN("Invalid value of the cookie entry, skipped; {}={}", name, value);
             continue;
         }
 
-        // If there are multiple pairs with the same name, only store the first to be compliant
-        // with RFC first-match policy.
-        cookies_.insert({fields[0], urls::decode_view(fields[1])});
+        // Preserve duplicates in encounter order.
+        cookies_[name].push_back(value);
     }
 }
 
@@ -101,11 +134,16 @@ std::string cookie::to_string() const {
         return str;
     }
 
+    if (!valid_cookie_value(value)) {
+        SPDLOG_ERROR("Invalid cookie value, abort; name={}", name);
+        return str;
+    }
+
     // Derived from typical length of cookie attributes, rule of thumb.
     constexpr std::size_t extra_cookie_len = 110;
     str.reserve(name.size() + value.size() + domain.size() + path.size() + extra_cookie_len);
 
-    str.append(name).append(1, '=').append(urls::encode(value, urls::unreserved_chars));
+    str.append(name).append(1, '=').append(value);
 
     if (!path.empty()) {
         if (valid_cookie_path_value(path)) {
@@ -116,11 +154,11 @@ std::string cookie::to_string() const {
     }
 
     if (!domain.empty()) {
-        if (valid_cookie_domain(domain)) {
-            // Leading `.` is no longer required.
-            const auto sv = domain.starts_with('.') ? std::string_view{domain}.substr(1)
-                                                    : std::string_view{domain};
-            str.append("; Domain=").append(sv);
+        // Leading `.` is no longer required.
+        const auto domain_value = domain.starts_with('.') ? std::string_view{domain}.substr(1)
+                                                          : std::string_view{domain};
+        if (valid_cookie_domain(domain_value)) {
+            str.append("; Domain=").append(domain_value);
         } else {
             SPDLOG_WARN("Invalid domain value, skipped; domain={}", domain);
         }
@@ -132,9 +170,13 @@ std::string cookie::to_string() const {
 
     if (expires.has_value()) {
         if (valid_expires(*expires)) {
-            str.append("; Expires=").append(fmt::format("{:%a, %d %b %Y %H:%M:%S} GMT", *expires));
+            // Format calendar components directly to avoid platform-specific gmtime limits.
+            const auto date = std::chrono::floor<std::chrono::days>(*expires);
+            str.append("; Expires=")
+                .append(fmt::format("{:%a}, {:%d %b %Y} {:%H:%M:%S} GMT",
+                                    std::chrono::weekday{date}, std::chrono::year_month_day{date},
+                                    *expires - date));
         } else {
-            // Some extreme time_point values may cause format error.
             SPDLOG_WARN("Invalid expires value, skipped; expires_in_seconds={}",
                         expires->time_since_epoch());
         }
@@ -154,6 +196,34 @@ std::string cookie::to_string() const {
     }
 
     return str;
+}
+
+std::expected<void, cookie_error> cookie::validate() const {
+    if (name.empty() || !is_token(name)) {
+        return std::unexpected{cookie_error::invalid_name};
+    }
+
+    if (!valid_cookie_value(value)) {
+        return std::unexpected{cookie_error::invalid_value};
+    }
+
+    if (!path.empty() && !valid_cookie_path_value(path)) {
+        return std::unexpected{cookie_error::invalid_path};
+    }
+
+    if (!domain.empty()) {
+        const auto domain_value = domain.starts_with('.') ? std::string_view{domain}.substr(1)
+                                                          : std::string_view{domain};
+        if (!valid_cookie_domain(domain_value)) {
+            return std::unexpected{cookie_error::invalid_domain};
+        }
+    }
+
+    if (expires.has_value() && !valid_expires(*expires)) {
+        return std::unexpected{cookie_error::invalid_expires};
+    }
+
+    return {};
 }
 
 } // namespace fawkes

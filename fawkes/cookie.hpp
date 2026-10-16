@@ -5,23 +5,27 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
+#include <expected>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
 
 #include <boost/beast/http/message.hpp>
+#include <boost/container/small_vector.hpp>
 #include <boost/unordered/unordered_flat_map.hpp>
-#include <boost/url/decode_view.hpp>
 
 namespace fawkes {
 
 namespace http = boost::beast::http;
-namespace urls = boost::urls;
 
+// The request header refered by a `cookie_view` must retain valid.
 class cookie_view {
 public:
     using iterator = http::request_header<>::iterator;
@@ -54,23 +58,39 @@ public:
         return cookies_.contains(name);
     }
 
-    [[nodiscard]] std::optional<std::string> get(std::string_view name) const {
+    // Returns the first value matched.
+    [[nodiscard]] std::optional<std::string_view> get(std::string_view name) const noexcept {
         auto it = cookies_.find(name);
         if (it == cookies_.end()) {
             return std::nullopt;
         }
 
-        return std::make_optional<std::string>(it->second.begin(), it->second.end());
+        assert(!it->second.empty());
+        return std::make_optional<std::string_view>(it->second[0]);
     }
+
+    // Returns all values matched; the view must retain valid.
+    [[nodiscard]] std::span<const std::string_view> get_all(std::string_view name) const& noexcept {
+        auto it = cookies_.find(name);
+        if (it == cookies_.end()) {
+            return {};
+        }
+
+        return it->second;
+    }
+
+    [[nodiscard]] std::span<const std::string_view> get_all(std::string_view name) const&& = delete;
 
 private:
     static std::size_t estimate_cookie_count(std::string_view value) {
         return static_cast<std::size_t>(std::ranges::count(value, ';')) + 1;
     }
 
+    // Encodings are preserved, but surrounding quotes will be removed.
     void parse_cookie_value(std::string_view cookie_value);
 
-    boost::unordered_flat_map<std::string_view, urls::decode_view> cookies_;
+    using value_type = boost::container::small_vector<std::string_view, 1>;
+    boost::unordered_flat_map<std::string_view, value_type> cookies_;
 };
 
 enum class same_site_policy : std::uint8_t {
@@ -78,6 +98,14 @@ enum class same_site_policy : std::uint8_t {
     strict,
     lax,
     none,
+};
+
+enum class cookie_error {
+    invalid_name = 1,
+    invalid_value,
+    invalid_path,
+    invalid_domain,
+    invalid_expires,
 };
 
 [[nodiscard]] inline std::string_view to_string(same_site_policy policy) {
@@ -96,7 +124,7 @@ enum class same_site_policy : std::uint8_t {
 
 struct cookie {
     std::string name;
-    std::string value; // Will percent-escape when stringify.
+    std::string value; // Encode arbitrary data before setting.
 
     std::string path;
     std::string domain;
@@ -115,10 +143,13 @@ struct cookie {
         : name(std::move(c_name)),
           value(std::move(c_value)) {}
 
-    // If `name` is not a http token, fails and returns an empty string, and `value` will be
-    // percent-escaped when necessary.
-    // Other fileds will be skipped if invalid.
+    // Returns an empty string if `name` is not an HTTP token or `value` contains
+    // forbidden cookie bytes. Valid values are emitted unchanged.
+    // Invalid optional attributes are skipped.
     [[nodiscard]] std::string to_string() const;
+
+    // Checks serialization syntax and expiration range, returning the first error encountered.
+    [[nodiscard]] std::expected<void, cookie_error> validate() const;
 };
 
 } // namespace fawkes
