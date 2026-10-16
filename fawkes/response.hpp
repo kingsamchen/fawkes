@@ -92,7 +92,7 @@ public:
     void add_set_cookie(const cookie& cookie) {
         const auto value = cookie.to_string();
         if (!value.empty()) {
-            header().insert(http::field::cookie, value);
+            header().insert(http::field::set_cookie, value);
         }
     }
 

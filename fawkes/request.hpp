@@ -80,6 +80,8 @@ public:
         return impl_.base();
     }
 
+    // Parse and return cookie entries.
+    // The `cookie_view` refers to the request header.
     [[nodiscard]] cookie_view cookies() const {
         auto [begin, end] = header().equal_range(http::field::cookie);
         return cookie_view(begin, end);

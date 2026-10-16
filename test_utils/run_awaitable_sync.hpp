@@ -33,7 +33,7 @@ T run_awaitable_sync(asio::io_context& ioc, asio::awaitable<T> awaitable) {
     if (eptr) {
         std::rethrow_exception(eptr);
     }
-    return std::move(result.value()); // NOLINT(bugprone-unchecked-optional-access)
+    return std::move(result.value());
 }
 
 void run_awaitable_sync(asio::io_context& ioc, asio::awaitable<void> awaitable);

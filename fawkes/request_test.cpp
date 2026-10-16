@@ -2,11 +2,13 @@
 // This file is subject to the terms of license that can be found
 // in the LICENSE file.
 
+#include <algorithm>
 #include <optional>
 #include <string_view>
 #include <utility>
 
 #include <boost/asio/awaitable.hpp>
+#include <boost/beast/http/field.hpp>
 #include <doctest/doctest.h>
 
 #include "fawkes/errors.hpp"
@@ -47,6 +49,31 @@ TEST_CASE("Carries connection endpoints") {
 
     CHECK_EQ(req.local_endpoint(), local);
     CHECK_EQ(req.remote_endpoint(), remote);
+}
+
+TEST_CASE("Cookie access preserves duplicate values across header fields") {
+    fawkes::request::impl_type raw_req;
+    raw_req.target("/");
+    raw_req.insert(http::field::cookie, "sid=first; sid=");
+    raw_req.insert(http::field::user_agent, "fawkes-request-cookie-test");
+    raw_req.insert(http::field::cookie, "sid=a%2Fb+%2G; sid=YWJjZA==");
+    raw_req.insert(http::field::cookie, "sid=first");
+    const fawkes::request req(std::move(raw_req), dummy_conn_info());
+
+    const auto cookies = req.cookies();
+    REQUIRE_EQ(cookies.size(), 1);
+    const auto first = cookies.get("sid");
+    REQUIRE(first.has_value());
+    CHECK_EQ(*first, "first");
+
+    constexpr std::string_view expected_values[] = {
+        "first",
+        "",
+        "a%2Fb+%2G",
+        "YWJjZA==",
+        "first",
+    };
+    CHECK(std::ranges::equal(cookies.get_all("sid"), expected_values));
 }
 
 TEST_CASE("Percent-decode path automatically") {
@@ -101,7 +128,7 @@ TEST_CASE("Query parameters operations") {
     SUBCASE("key+1 has explicit value") {
         auto val1 = req.queries().get("key+1");
         REQUIRE(val1.has_value());
-        CHECK_EQ(*val1, "hello world"); // NOLINT(bugprone-unchecked-optional-access)
+        CHECK_EQ(*val1, "hello world");
 
         auto val2 = req.queries().get_or("key+1", "empty");
         CHECK_EQ(val2, "hello world");
@@ -110,7 +137,7 @@ TEST_CASE("Query parameters operations") {
     SUBCASE("key+2 has empty value") {
         auto val1 = req.queries().get("key+2");
         REQUIRE(val1.has_value());
-        CHECK_EQ(*val1, ""); // NOLINT(bugprone-unchecked-optional-access)
+        CHECK_EQ(*val1, "");
 
         auto val2 = req.queries().get_or("key+2", "empty");
         CHECK_EQ(val2, "");
@@ -119,7 +146,7 @@ TEST_CASE("Query parameters operations") {
     SUBCASE("key+3 has implicit empty value") {
         auto val1 = req.queries().get("key+3");
         REQUIRE(val1.has_value());
-        CHECK_EQ(*val1, ""); // NOLINT(bugprone-unchecked-optional-access)
+        CHECK_EQ(*val1, "");
 
         auto val2 = req.queries().get_or("key+3", "empty");
         CHECK_EQ(val2, "");
