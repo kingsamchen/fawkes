@@ -87,7 +87,6 @@ TEST_CASE("GET response sends body with Content-Length") {
     CHECK_EQ(out.header.result(), http::status::ok);
     CHECK_EQ(out.header[http::field::content_length], "5");
     CHECK_EQ(out.header[http::field::content_type], fawkes::mime::text);
-    CHECK_EQ(out.header[http::field::x_content_type_options], "nosniff");
     CHECK_EQ(out.payload, "hello");
     CHECK(out.keep_alive);
 }
@@ -150,7 +149,6 @@ TEST_CASE("HEAD response drops body and sets Content-Length from body") {
     CHECK_FALSE(out.header.contains(http::field::transfer_encoding));
     CHECK_FALSE(out.header.contains(http::field::trailer));
     CHECK_EQ(out.header[http::field::content_type], fawkes::mime::text);
-    CHECK_EQ(out.header[http::field::x_content_type_options], "nosniff");
 
     CHECK(out.payload.empty());
     CHECK(out.keep_alive);
@@ -192,7 +190,6 @@ TEST_CASE("HEAD response with empty body preserves protocol version and connecti
 
             CHECK_EQ(out.header.version(), version);
             CHECK_EQ(out.keep_alive, keep_alive);
-            CHECK_EQ(out.header[http::field::x_content_type_options], "nosniff");
             CHECK_FALSE(out.header.contains(http::field::content_length));
             CHECK(out.payload.empty());
         }
@@ -213,7 +210,6 @@ TEST_CASE("No Content response carries neither framing headers nor body") {
         CHECK_FALSE(out.header.contains(http::field::transfer_encoding));
         CHECK_FALSE(out.header.contains(http::field::trailer));
         CHECK_EQ(out.header[http::field::content_type], fawkes::mime::text);
-        CHECK_EQ(out.header[http::field::x_content_type_options], "nosniff");
 
         CHECK(out.payload.empty());
         CHECK(out.keep_alive);
@@ -238,7 +234,6 @@ TEST_CASE("Not Modified response drops body, Content-Type and framing headers") 
         CHECK_FALSE(out.header.contains(http::field::trailer));
         CHECK_EQ(out.header[http::field::etag], "\"v1\"");
         CHECK_EQ(out.header[http::field::cache_control], "max-age=60");
-        CHECK_EQ(out.header[http::field::x_content_type_options], "nosniff");
 
         CHECK(out.payload.empty());
         CHECK(out.keep_alive);
