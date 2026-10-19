@@ -68,15 +68,6 @@ auto make_no_fail(F&& fn, std::source_location loc = std::source_location::curre
     };
 }
 
-http::message_generator make_content_too_large_response(unsigned int version, http::verb method) {
-    const json::object body{
-        {"error", json::object{{"message", "Request body too large"}}}};
-
-    response resp(version, false);
-    resp.json(http::status::payload_too_large, json::serialize(body));
-    return detail::prepare_response(method, resp);
-}
-
 std::string_view safe_request_content_length(const http::request<http::string_body>& request) {
     // `content_length()` requires a completed header; body_limit can be reported before then.
     const std::string_view raw = request[http::field::content_length];
@@ -104,8 +95,6 @@ namespace detail {
 
 http::message_generator prepare_response(http::verb method, response& resp) {
     auto& impl = resp.as_impl();
-
-    impl.set(http::field::x_content_type_options, "nosniff");
 
     // RFC says this response cannot even contain the `Content-Length` header.
     if (impl.result() == http::status::no_content) {
@@ -142,6 +131,18 @@ http::message_generator prepare_response(http::verb method, response& resp) {
 }
 
 } // namespace detail
+
+http::message_generator server::make_content_too_large_response(unsigned int version,
+                                                                http::verb method) const {
+    const json::object body{{"error", json::object{{"message", "Request body too large"}}}};
+
+    response resp(version, false);
+    resp.json(http::status::payload_too_large, json::serialize(body));
+    if (rejection_response_hook_) {
+        rejection_response_hook_(resp);
+    }
+    return detail::prepare_response(method, resp);
+}
 
 void server::listen_and_serve(const std::string& addr, std::uint16_t port) {
     const auto endpoint = asio::ip::tcp::endpoint(asio::ip::make_address(addr), port);
@@ -315,9 +316,11 @@ asio::awaitable<http::message_generator> server::handle_request(
         co_await router_.dispatch(fwk_req, fwk_resp);
     } catch (const invalid_request_target& ex) {
         SPDLOG_ERROR("Invalid request target; what={} target={}", ex.what(), ex.target());
-        const json::object body{
-            {"error", json::object{{"message", "Invalid request"}}}};
+        const json::object body{{"error", json::object{{"message", "Invalid request"}}}};
         fwk_resp.json(http::status::bad_request, json::serialize(body));
+        if (rejection_response_hook_) {
+            rejection_response_hook_(fwk_resp);
+        }
     } catch (const std::exception& ex) {
         SPDLOG_ERROR("Unexpected exception for the request; what={}", ex.what());
         const json::object body{

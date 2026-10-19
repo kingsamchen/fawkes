@@ -100,6 +100,11 @@ public:
         opts_ = opts;
     }
 
+    // Configure before listening; the callback must support concurrent calls.
+    void set_rejection_response_hook(std::move_only_function<void(response&) const> hook) {
+        rejection_response_hook_ = std::move(hook);
+    }
+
     void listen_and_serve(const std::string& addr, std::uint16_t port);
 
     // Not thread-safe, must be called on the thread running the acceptor's executor.
@@ -209,12 +214,16 @@ private:
     static void handle_session_error(const asio::ip::tcp::endpoint& remote,
                                      std::exception_ptr eptr);
 
+    [[nodiscard]] http::message_generator make_content_too_large_response(unsigned int version,
+                                                                          http::verb method) const;
+
     std::reference_wrapper<asio::io_context> io_ctx_;
     io_thread_pool* io_pool_{nullptr};
     options opts_;
     std::stop_source stop_source_;
     asio::ip::tcp::acceptor acceptor_;
     router router_;
+    std::move_only_function<void(response&) const> rejection_response_hook_;
 };
 
 } // namespace fawkes
