@@ -54,9 +54,9 @@ public:
         // If zero or negative, there is no timeout.
         std::chrono::milliseconds read_timeout{0};
 
-        // The maximum duration allowed to read the entire request, handle it, and send back the
-        // response.
-        // Should be larger than `read_timeout`.
+        // The maximum duration allowed to read a request and write its response,
+        // measured after the first received data. It does not interrupt handlers
+        // or worker jobs. Should be larger than `read_timeout`.
         // If zero or negative, there is no timeout.
         std::chrono::milliseconds serve_timeout{0};
 
@@ -109,6 +109,8 @@ public:
 
     // Not thread-safe, must be called on the thread running the acceptor's executor.
     // This function initiates the shutdown of the server, and returns immediately.
+    // Idle connections and incomplete request reads are cancelled. Fully read
+    // requests finish their handlers and responses before their connections close.
     void stop() {
 #ifndef NDEBUG
         {

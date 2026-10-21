@@ -173,6 +173,7 @@ asio::awaitable<void> server::do_listen() {
             continue;
         }
 
+        sock.set_option(asio::ip::tcp::no_delay{true});
         auto remote_endpoint = sock.remote_endpoint();
         beast::tcp_stream stream(std::move(sock));
         asio::co_spawn(executor, serve_session(std::move(stream), stop_source_.get_token()),
@@ -201,7 +202,7 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
 
     // TODO(KC): handle http async_read/async_write exception ?
     // can stream still be usable in this case?
-    for (;;) {
+    for (; !stop_token.stop_requested();) {
         http::request_parser<http::string_body> parser;
         set_body_limit(parser, opts_);
 
@@ -240,7 +241,14 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
         buf.consume(bytes_consumed);
 
         if (!parser.is_header_done()) {
-            co_await http::async_read_header(stream, buf, parser, asio::redirect_error(ec));
+            if (stop_token.stop_requested()) {
+                break;
+            }
+            co_await http::async_read_header(
+                stream,
+                buf,
+                parser,
+                asio::bind_cancellation_slot(stop_signal.slot(), asio::redirect_error(ec)));
             if (ec) {
                 if (ec == http::error::body_limit) {
                     const auto& req = parser.get();
@@ -266,7 +274,14 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
 
         // Read the body.
         if (!parser.is_done()) {
-            co_await http::async_read(stream, buf, parser, asio::redirect_error(ec));
+            if (stop_token.stop_requested()) {
+                break;
+            }
+            co_await http::async_read(
+                stream,
+                buf,
+                parser,
+                asio::bind_cancellation_slot(stop_signal.slot(), asio::redirect_error(ec)));
             if (ec) {
                 if (ec == http::error::body_limit) {
                     const auto& req = parser.get();
@@ -296,7 +311,7 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
 
         co_await beast::async_write(stream, std::move(resp));
 
-        if (!keep_alive || stop_token.stop_requested()) {
+        if (!keep_alive) {
             break;
         }
     }
