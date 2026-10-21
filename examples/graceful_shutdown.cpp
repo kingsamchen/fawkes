@@ -49,11 +49,9 @@ int main(int argc, char* argv[]) {
             if (!ec) {
                 SPDLOG_INFO("Received signal, shutting down the server");
 
-                // svc.stop() would close the acceptor to ensure no more new connections would
-                // be accepted. It also closes any idle connections, and any active connections
-                // after they finish the current request and response.
-                // If your server impl has other sources that may generate new events or activities,
-                // you may need to stop them first as well.
+                // svc.stop() closes the acceptor and cancels idle or incomplete reads.
+                // Fully read requests finish their handlers and responses before their
+                // connections close. Other event sources may need stopping first.
                 svc.stop();
 
                 // Wait for active io events to finish first.
