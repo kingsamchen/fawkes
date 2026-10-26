@@ -70,6 +70,7 @@ int main(int argc, char* argv[]) {
         io_ctx.run();
     } catch (const std::exception& ex) {
         SPDLOG_ERROR("Unexpected error: {}", ex.what());
+        return 1;
     }
 
     return 0;
