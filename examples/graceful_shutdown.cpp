@@ -85,6 +85,7 @@ int main(int argc, char* argv[]) {
         SPDLOG_INFO("Server exits");
     } catch (const std::exception& ex) {
         SPDLOG_ERROR("Unexpected error: {}", ex.what());
+        return 1;
     }
 
     return 0;

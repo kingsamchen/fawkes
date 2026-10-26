@@ -12,13 +12,11 @@
 #include <string_view>
 #include <utility>
 
-#include <boost/asio/as_tuple.hpp>
 #include <boost/asio/bind_cancellation_slot.hpp>
 #include <boost/asio/cancellation_signal.hpp>
 #include <boost/asio/cancellation_state.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/deferred.hpp>
-#include <boost/asio/detached.hpp>
 #include <boost/asio/error.hpp>
 #include <boost/asio/redirect_error.hpp>
 #include <boost/beast/core.hpp>
@@ -151,7 +149,11 @@ void server::listen_and_serve(const std::string& addr, std::uint16_t port) {
     acceptor_.set_option(asio::ip::tcp::acceptor::reuse_address{true});
     acceptor_.bind(endpoint);
     acceptor_.listen(asio::socket_base::max_listen_connections);
-    asio::co_spawn(io_ctx_.get(), do_listen(), asio::detached);
+    asio::co_spawn(io_ctx_.get(), do_listen(), [](std::exception_ptr eptr) {
+        if (eptr) {
+            std::rethrow_exception(eptr);
+        }
+    });
 }
 
 asio::awaitable<void> server::do_listen() {
@@ -163,7 +165,8 @@ asio::awaitable<void> server::do_listen() {
             return io_pool_ ? io_pool_->get_executor() : main_executor;
         }();
 
-        auto [ec, sock] = co_await acceptor_.async_accept(executor, asio::as_tuple);
+        boost::system::error_code ec;
+        auto sock = co_await acceptor_.async_accept(executor, asio::redirect_error(ec));
         if (ec) {
             if (ec == asio::error::operation_aborted || !acceptor_.is_open()) {
                 SPDLOG_DEBUG("Acceptor is closed");
@@ -173,8 +176,19 @@ asio::awaitable<void> server::do_listen() {
             continue;
         }
 
-        sock.set_option(asio::ip::tcp::no_delay{true});
-        auto remote_endpoint = sock.remote_endpoint();
+        sock.set_option(asio::ip::tcp::no_delay{true}, ec);
+        if (ec) {
+            SPDLOG_ERROR("Failed to set TCP_NODELAY; ec={}", fmt::streamed(ec));
+            continue;
+        }
+
+        // The peer may have reset the connection while it was queued for accept.
+        auto remote_endpoint = sock.remote_endpoint(ec);
+        if (ec) {
+            SPDLOG_ERROR("Failed to get remote endpoint; ec={}", fmt::streamed(ec));
+            continue;
+        }
+
         beast::tcp_stream stream(std::move(sock));
         asio::co_spawn(executor, serve_session(std::move(stream), stop_source_.get_token()),
                        [endpoint = std::move(remote_endpoint)](std::exception_ptr eptr) {
