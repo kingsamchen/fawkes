@@ -20,6 +20,7 @@
 #include <boost/asio/deferred.hpp>
 #include <boost/asio/error.hpp>
 #include <boost/asio/redirect_error.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/core/error.hpp>
 #include <boost/beast/core/string.hpp>
@@ -240,6 +241,7 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
 
     // TODO(KC): handle http async_read/async_write exception ?
     // can stream still be usable in this case?
+    bool need_rst_avoidance = false;
     for (; !stop_token.stop_requested();) {
         http::request_parser<http::string_body> parser;
         set_body_limit(parser, opts_);
@@ -273,6 +275,7 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
                              fmt::streamed(info.remote));
                 auto resp = make_content_too_large_response(req.version(), req.method());
                 co_await beast::async_write(stream, std::move(resp));
+                need_rst_avoidance = true;
                 break;
             }
             throw boost::system::system_error(ec);
@@ -299,6 +302,7 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
                                  fmt::streamed(info.remote));
                     auto resp = make_content_too_large_response(req.version(), req.method());
                     co_await beast::async_write(stream, std::move(resp));
+                    need_rst_avoidance = true;
                     break;
                 }
                 throw boost::system::system_error(ec);
@@ -333,6 +337,7 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
                                  fmt::streamed(info.remote));
                     auto resp = make_content_too_large_response(req.version(), req.method());
                     co_await beast::async_write(stream, std::move(resp));
+                    need_rst_avoidance = true;
                     break;
                 }
                 throw boost::system::system_error(ec);
@@ -354,7 +359,13 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
         }
     }
 
-    stream.socket().shutdown(asio::ip::tcp::socket::shutdown_both);
+    boost::system::error_code ec;
+    stream.socket().shutdown(asio::ip::tcp::socket::shutdown_send, ec);
+
+    if (!ec && need_rst_avoidance && opts_.rst_avoidance_delay > 0ms) {
+        asio::steady_timer waiter(executor, opts_.rst_avoidance_delay);
+        co_await waiter.async_wait(asio::redirect_error(ec));
+    }
 }
 
 asio::awaitable<http::message_generator> server::handle_request(

@@ -78,6 +78,12 @@ public:
 
         // Size in bytes.
         std::size_t request_body_limit{options::default_body_limit};
+
+        // Delay before closing a connection rejected by the request body limit.
+        // Closing with unread request data makes the kernel send a RST, which can
+        // discard the error response; the delay gives the peer a best-effort
+        // chance to read it first. If zero or negative, close immediately.
+        std::chrono::milliseconds rst_avoidance_delay{500};
     };
 
     explicit server(asio::io_context& io_ctx)
