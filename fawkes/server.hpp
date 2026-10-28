@@ -208,6 +208,7 @@ private:
     asio::awaitable<void> do_listen();
 
     [[nodiscard]] asio::awaitable<void> serve_session(beast::tcp_stream stream,
+                                                      conn_info info,
                                                       std::stop_token stop_token) const;
 
     [[nodiscard]] asio::awaitable<http::message_generator> handle_request(

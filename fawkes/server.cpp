@@ -6,6 +6,7 @@
 
 #include <chrono>
 #include <exception>
+#include <expected>
 #include <functional>
 #include <source_location>
 #include <string>
@@ -64,6 +65,24 @@ auto make_no_fail(F&& fn, std::source_location loc = std::source_location::curre
                          loc.file_name(), loc.line());
         }
     };
+}
+
+[[nodiscard]] std::expected<conn_info, boost::system::error_code>
+make_conn_info(const asio::ip::tcp::socket& sock) {
+    boost::system::error_code ec;
+
+    auto local = sock.local_endpoint(ec);
+    if (ec) {
+        return std::unexpected(ec);
+    }
+
+    auto remote = sock.remote_endpoint(ec);
+    if (ec) {
+        return std::unexpected(ec);
+    }
+
+    return std::expected<conn_info, boost::system::error_code>{
+        std::in_place, std::move(local), std::move(remote)};
 }
 
 std::string_view safe_request_content_length(const http::request<http::string_body>& request) {
@@ -178,26 +197,31 @@ asio::awaitable<void> server::do_listen() {
 
         sock.set_option(asio::ip::tcp::no_delay{true}, ec);
         if (ec) {
-            SPDLOG_ERROR("Failed to set TCP_NODELAY; ec={}", fmt::streamed(ec));
+            SPDLOG_WARN("Failed to set TCP_NODELAY; ec={}", fmt::streamed(ec));
             continue;
         }
 
         // The peer may have reset the connection while it was queued for accept.
-        auto remote_endpoint = sock.remote_endpoint(ec);
-        if (ec) {
-            SPDLOG_ERROR("Failed to get remote endpoint; ec={}", fmt::streamed(ec));
+        auto info_or = make_conn_info(sock);
+        if (!info_or) {
+            SPDLOG_WARN("Failed to construct the connection info; ec={}",
+                        fmt::streamed(info_or.error()));
             continue;
         }
 
         beast::tcp_stream stream(std::move(sock));
-        asio::co_spawn(executor, serve_session(std::move(stream), stop_source_.get_token()),
-                       [endpoint = std::move(remote_endpoint)](std::exception_ptr eptr) {
+        auto remote = info_or->remote;
+        asio::co_spawn(executor,
+                       serve_session(
+                           std::move(stream), std::move(*info_or), stop_source_.get_token()),
+                       [endpoint = std::move(remote)](std::exception_ptr eptr) {
                            handle_session_error(endpoint, eptr);
                        });
     }
 }
 
 asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
+                                            conn_info info,
                                             std::stop_token stop_token) const {
     using namespace std::chrono_literals;
 
@@ -242,10 +266,11 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
             if (ec == http::error::body_limit) {
                 const auto& req = parser.get();
                 SPDLOG_ERROR("Failed to serve the request because body limit exceeded; "
-                             "method={} target={} content_length={}",
+                             "method={} target={} content_length={} remote={}",
                              req.method_string(),
                              req.target(),
-                             safe_request_content_length(req));
+                             safe_request_content_length(req),
+                             fmt::streamed(info.remote));
                 auto resp = make_content_too_large_response(req.version(), req.method());
                 co_await beast::async_write(stream, std::move(resp));
                 break;
@@ -267,10 +292,11 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
                 if (ec == http::error::body_limit) {
                     const auto& req = parser.get();
                     SPDLOG_ERROR("Failed to serve the request because body limit exceeded; "
-                                 "method={} target={} content_length={}",
+                                 "method={} target={} content_length={} remote={}",
                                  req.method_string(),
                                  req.target(),
-                                 safe_request_content_length(req));
+                                 safe_request_content_length(req),
+                                 fmt::streamed(info.remote));
                     auto resp = make_content_too_large_response(req.version(), req.method());
                     co_await beast::async_write(stream, std::move(resp));
                     break;
@@ -300,10 +326,11 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
                 if (ec == http::error::body_limit) {
                     const auto& req = parser.get();
                     SPDLOG_ERROR("Failed to serve the request because body limit exceeded; "
-                                 "method={} target={} content_length={}",
+                                 "method={} target={} content_length={} remote={}",
                                  req.method_string(),
                                  req.target(),
-                                 safe_request_content_length(req));
+                                 safe_request_content_length(req),
+                                 fmt::streamed(info.remote));
                     auto resp = make_content_too_large_response(req.version(), req.method());
                     co_await beast::async_write(stream, std::move(resp));
                     break;
@@ -317,10 +344,7 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
             stream.expires_after(opts_.serve_timeout - read_elapsed);
         }
 
-        auto resp = co_await handle_request(
-            parser.release(),
-            conn_info{.local = stream.socket().local_endpoint(),
-                      .remote = stream.socket().remote_endpoint()});
+        auto resp = co_await handle_request(parser.release(), info);
         const bool keep_alive = resp.keep_alive();
 
         co_await beast::async_write(stream, std::move(resp));
