@@ -9,6 +9,7 @@
 #include <expected>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <source_location>
 #include <string>
 #include <string_view>
@@ -108,6 +109,32 @@ void set_body_limit(http::request_parser<http::string_body>& parser, const serve
     }
 }
 
+// The message framing is lost after these errors, but the stream can still carry a response.
+bool is_malformed_request(const boost::system::error_code& ec) noexcept {
+    if (ec.category() != http::make_error_code(http::error::bad_line_ending).category()) {
+        return false;
+    }
+
+    switch (static_cast<http::error>(ec.value())) {
+    case http::error::bad_line_ending:
+    case http::error::bad_method:
+    case http::error::bad_target:
+    case http::error::bad_version:
+    case http::error::bad_field:
+    case http::error::bad_value:
+    case http::error::bad_content_length:
+    case http::error::bad_transfer_encoding:
+    case http::error::bad_chunk:
+    case http::error::bad_chunk_extension:
+    case http::error::bad_obs_fold:
+    case http::error::multiple_content_length:
+        return true;
+
+    default:
+        return false;
+    }
+}
+
 } // namespace
 
 namespace detail {
@@ -155,16 +182,44 @@ http::message_generator prepare_response(bool close_connection, http::verb metho
 
 } // namespace detail
 
-http::message_generator server::make_content_too_large_response(unsigned int version,
-                                                                http::verb method) const {
-    const json::object body{{"error", json::object{{"message", "Request body too large"}}}};
+std::optional<http::message_generator> server::make_rejection_response(
+    const boost::system::error_code& ec,
+    const http::request<http::string_body>& req,
+    const conn_info& info) const {
+    auto build_resp = [this,
+                       version = req.version(),
+                       method = req.method()](http::status status, std::string_view message) {
+        const json::object body{{"error", json::object{{"message", message}}}};
 
-    response resp(version);
-    resp.json(http::status::payload_too_large, json::serialize(body));
-    if (rejection_response_hook_) {
-        rejection_response_hook_(resp);
+        response resp(version);
+        resp.json(status, json::serialize(body));
+        if (rejection_response_hook_) {
+            rejection_response_hook_(resp);
+        }
+        return detail::prepare_response(true, method, resp);
+    };
+
+    if (ec == http::error::body_limit) {
+        SPDLOG_ERROR("Failed to serve the request because body limit exceeded; method={} "
+                     "target={} content_length={} remote={}",
+                     req.method_string(),
+                     req.target(),
+                     safe_request_content_length(req),
+                     fmt::streamed(info.remote));
+        return build_resp(http::status::payload_too_large, "Request body too large");
     }
-    return detail::prepare_response(true, method, resp);
+
+    if (is_malformed_request(ec)) {
+        SPDLOG_ERROR("Failed to serve the request because it is malformed; ec={} method={} "
+                     "target={} remote={}",
+                     fmt::streamed(ec),
+                     req.method_string(),
+                     req.target(),
+                     fmt::streamed(info.remote));
+        return build_resp(http::status::bad_request, "Invalid request");
+    }
+
+    return std::nullopt;
 }
 
 void server::listen_and_serve(const std::string& addr, std::uint16_t port) {
@@ -273,16 +328,9 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
         boost::system::error_code ec;
         const auto bytes_consumed = parser.put(buf.data(), ec);
         if (ec && ec != http::error::need_more) {
-            if (ec == http::error::body_limit) {
-                const auto& req = parser.get();
-                SPDLOG_ERROR("Failed to serve the request because body limit exceeded; "
-                             "method={} target={} content_length={} remote={}",
-                             req.method_string(),
-                             req.target(),
-                             safe_request_content_length(req),
-                             fmt::streamed(info.remote));
-                auto resp = make_content_too_large_response(req.version(), req.method());
-                co_await beast::async_write(stream, std::move(resp));
+            if (auto maybe_resp = make_rejection_response(ec, parser.get(), info);
+                maybe_resp.has_value()) {
+                co_await beast::async_write(stream, std::move(*maybe_resp));
                 need_rst_avoidance = true;
                 break;
             }
@@ -300,16 +348,9 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
                 parser,
                 asio::bind_cancellation_slot(stop_signal->slot(), asio::redirect_error(ec)));
             if (ec) {
-                if (ec == http::error::body_limit) {
-                    const auto& req = parser.get();
-                    SPDLOG_ERROR("Failed to serve the request because body limit exceeded; "
-                                 "method={} target={} content_length={} remote={}",
-                                 req.method_string(),
-                                 req.target(),
-                                 safe_request_content_length(req),
-                                 fmt::streamed(info.remote));
-                    auto resp = make_content_too_large_response(req.version(), req.method());
-                    co_await beast::async_write(stream, std::move(resp));
+                if (auto maybe_resp = make_rejection_response(ec, parser.get(), info);
+                    maybe_resp.has_value()) {
+                    co_await beast::async_write(stream, std::move(*maybe_resp));
                     need_rst_avoidance = true;
                     break;
                 }
@@ -335,16 +376,9 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
                 parser,
                 asio::bind_cancellation_slot(stop_signal->slot(), asio::redirect_error(ec)));
             if (ec) {
-                if (ec == http::error::body_limit) {
-                    const auto& req = parser.get();
-                    SPDLOG_ERROR("Failed to serve the request because body limit exceeded; "
-                                 "method={} target={} content_length={} remote={}",
-                                 req.method_string(),
-                                 req.target(),
-                                 safe_request_content_length(req),
-                                 fmt::streamed(info.remote));
-                    auto resp = make_content_too_large_response(req.version(), req.method());
-                    co_await beast::async_write(stream, std::move(resp));
+                if (auto maybe_resp = make_rejection_response(ec, parser.get(), info);
+                    maybe_resp.has_value()) {
+                    co_await beast::async_write(stream, std::move(*maybe_resp));
                     need_rst_avoidance = true;
                     break;
                 }

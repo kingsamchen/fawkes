@@ -10,8 +10,10 @@
 #include <exception>
 #include <functional>
 #include <limits>
+#include <optional>
 #include <stop_token>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
 
@@ -23,8 +25,10 @@
 #include <boost/beast/core/tcp_stream.hpp>
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/message_generator.hpp>
+#include <boost/beast/http/status.hpp>
 #include <boost/beast/http/string_body.hpp>
 #include <boost/beast/http/verb.hpp>
+#include <boost/system/error_code.hpp>
 
 #include "fawkes/io_thread_pool.hpp"
 #include "fawkes/request.hpp"
@@ -225,8 +229,12 @@ private:
     static void handle_session_error(const asio::ip::tcp::endpoint& remote,
                                      std::exception_ptr eptr);
 
-    [[nodiscard]] http::message_generator make_content_too_large_response(unsigned int version,
-                                                                          http::verb method) const;
+    // Returns `std::nullopt` if the read error `ec` does not warrant a response before the
+    // connection closes.
+    [[nodiscard]] std::optional<http::message_generator> make_rejection_response(
+        const boost::system::error_code& ec,
+        const http::request<http::string_body>& req,
+        const conn_info& info) const;
 
     std::reference_wrapper<asio::io_context> io_ctx_;
     io_thread_pool* io_pool_{nullptr};
