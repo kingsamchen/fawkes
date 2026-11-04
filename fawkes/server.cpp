@@ -457,8 +457,8 @@ void server::handle_session_error(const asio::ip::tcp::endpoint& remote, std::ex
                              fmt::streamed(remote), ex.code().message());
             } else if (ex.code() == beast::error::timeout ||
                        ex.code() == asio::error::operation_aborted) {
-                SPDLOG_ERROR("Remote session timed out or cancelled; remote={} cause={}",
-                             fmt::streamed(remote), ex.code().message());
+                SPDLOG_INFO("Remote session timed out or cancelled; remote={} cause={}",
+                            fmt::streamed(remote), ex.code().message());
             } else {
                 SPDLOG_ERROR("Unhandled error for session; remote={} what={}",
                              fmt::streamed(remote), ex.what());
