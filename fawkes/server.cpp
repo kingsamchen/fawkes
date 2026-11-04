@@ -8,6 +8,7 @@
 #include <exception>
 #include <expected>
 #include <functional>
+#include <memory>
 #include <source_location>
 #include <string>
 #include <string_view>
@@ -232,13 +233,16 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
 
     auto executor = co_await asio::this_coro::executor;
 
-    asio::cancellation_signal stop_signal;
-    const std::stop_callback stop_callback(stop_token,
-                                           make_no_fail([&stop_signal, executor]() {
-                                               asio::dispatch(executor, [&stop_signal]() {
-                                                   stop_signal.emit(asio::cancellation_type::all);
-                                               });
-                                           }));
+    const auto stop_signal = std::make_shared<asio::cancellation_signal>();
+    const std::stop_callback stop_callback(
+        stop_token,
+        make_no_fail([executor, weak_signal = std::weak_ptr{stop_signal}]() {
+            asio::dispatch(executor, [weak_signal]() {
+                if (auto signal = weak_signal.lock()) {
+                    signal->emit(asio::cancellation_type::all);
+                }
+            });
+        }));
 
     beast::flat_buffer buf;
     const auto read_timeout = opts_.effective_read_timeout();
@@ -257,7 +261,7 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
         constexpr std::size_t initial_buf_size = 512U;
         const auto bytes_read = co_await stream.async_read_some(
             buf.prepare(initial_buf_size),
-            asio::bind_cancellation_slot(stop_signal.slot(), asio::deferred));
+            asio::bind_cancellation_slot(stop_signal->slot(), asio::deferred));
         buf.commit(bytes_read);
 
         if (read_timeout > 0ms) {
@@ -294,7 +298,7 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
                 stream,
                 buf,
                 parser,
-                asio::bind_cancellation_slot(stop_signal.slot(), asio::redirect_error(ec)));
+                asio::bind_cancellation_slot(stop_signal->slot(), asio::redirect_error(ec)));
             if (ec) {
                 if (ec == http::error::body_limit) {
                     const auto& req = parser.get();
@@ -329,7 +333,7 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
                 stream,
                 buf,
                 parser,
-                asio::bind_cancellation_slot(stop_signal.slot(), asio::redirect_error(ec)));
+                asio::bind_cancellation_slot(stop_signal->slot(), asio::redirect_error(ec)));
             if (ec) {
                 if (ec == http::error::body_limit) {
                     const auto& req = parser.get();
