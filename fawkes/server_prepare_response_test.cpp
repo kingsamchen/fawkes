@@ -82,7 +82,7 @@ TEST_SUITE_BEGIN("Server/PrepareResponse");
 TEST_CASE("GET response sends body with Content-Length") {
     auto resp = make_text_response(http::status::ok, "hello");
 
-    const auto out = write_out(fawkes::detail::prepare_response(http::verb::get, resp));
+    const auto out = write_out(fawkes::detail::prepare_response(false, http::verb::get, resp));
 
     CHECK_EQ(out.header.result(), http::status::ok);
     CHECK_EQ(out.header[http::field::content_length], "5");
@@ -116,7 +116,7 @@ TEST_CASE("Set-Cookie fields survive response preparation and serialization") {
         resp.add_set_cookie(session);
         resp.add_set_cookie(fawkes::cookie("value", "a+b/%2F"));
 
-        const auto out = write_out(fawkes::detail::prepare_response(test.method, resp));
+        const auto out = write_out(fawkes::detail::prepare_response(false, test.method, resp));
 
         auto [begin, end] = out.header.equal_range(http::field::set_cookie);
         REQUIRE_EQ(std::distance(begin, end), 2);
@@ -142,7 +142,7 @@ TEST_CASE("HEAD response drops body and sets Content-Length from body") {
         set_framing_headers(resp);
     }
 
-    const auto out = write_out(fawkes::detail::prepare_response(http::verb::head, resp));
+    const auto out = write_out(fawkes::detail::prepare_response(false, http::verb::head, resp));
 
     CHECK_EQ(out.header.result(), http::status::ok);
     CHECK_EQ(out.header[http::field::content_length], "5");
@@ -158,7 +158,7 @@ TEST_CASE("HEAD response with empty body leaves Content-Length to handler") {
     auto resp = make_text_response(http::status::ok, "");
 
     SUBCASE("no Content-Length from handler") {
-        const auto out = write_out(fawkes::detail::prepare_response(http::verb::head, resp));
+        const auto out = write_out(fawkes::detail::prepare_response(false, http::verb::head, resp));
 
         CHECK_FALSE(out.header.contains(http::field::content_length));
         CHECK(out.payload.empty());
@@ -168,7 +168,7 @@ TEST_CASE("HEAD response with empty body leaves Content-Length to handler") {
     SUBCASE("Content-Length from handler is kept") {
         resp.header().set(http::field::content_length, "42");
 
-        const auto out = write_out(fawkes::detail::prepare_response(http::verb::head, resp));
+        const auto out = write_out(fawkes::detail::prepare_response(false, http::verb::head, resp));
 
         CHECK_EQ(out.header[http::field::content_length], "42");
         CHECK(out.payload.empty());
@@ -186,7 +186,8 @@ TEST_CASE("HEAD response with empty body preserves protocol version and connecti
             fawkes::response resp(version, keep_alive);
             resp.set_status(http::status::ok);
 
-            const auto out = write_out(fawkes::detail::prepare_response(http::verb::head, resp));
+            const auto out = write_out(
+                fawkes::detail::prepare_response(false, http::verb::head, resp));
 
             CHECK_EQ(out.header.version(), version);
             CHECK_EQ(out.keep_alive, keep_alive);
@@ -203,7 +204,7 @@ TEST_CASE("No Content response carries neither framing headers nor body") {
         auto resp = make_text_response(http::status::no_content, "unexpected");
         set_framing_headers(resp);
 
-        const auto out = write_out(fawkes::detail::prepare_response(method, resp));
+        const auto out = write_out(fawkes::detail::prepare_response(false, method, resp));
 
         CHECK_EQ(out.header.result(), http::status::no_content);
         CHECK_FALSE(out.header.contains(http::field::content_length));
@@ -225,7 +226,7 @@ TEST_CASE("Not Modified response drops body, Content-Type and framing headers") 
         resp.header().set(http::field::etag, "\"v1\"");
         resp.header().set(http::field::cache_control, "max-age=60");
 
-        const auto out = write_out(fawkes::detail::prepare_response(method, resp));
+        const auto out = write_out(fawkes::detail::prepare_response(false, method, resp));
 
         CHECK_EQ(out.header.result(), http::status::not_modified);
         CHECK_FALSE(out.header.contains(http::field::content_length));
