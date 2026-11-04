@@ -39,7 +39,9 @@ namespace http = boost::beast::http;
 
 namespace detail {
 
-http::message_generator prepare_response(http::verb method, response& resp);
+// Set `close_connection` to true overrides any keep-alive set by handlers or hooks,
+// keep as-is if false.
+http::message_generator prepare_response(bool close_connection, http::verb method, response& resp);
 
 } // namespace detail
 

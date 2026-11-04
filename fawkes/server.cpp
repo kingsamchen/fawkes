@@ -111,8 +111,12 @@ void set_body_limit(http::request_parser<http::string_body>& parser, const serve
 
 namespace detail {
 
-http::message_generator prepare_response(http::verb method, response& resp) {
+http::message_generator prepare_response(bool close_connection, http::verb method, response& resp) {
     auto& impl = resp.as_impl();
+
+    if (close_connection) {
+        impl.keep_alive(false);
+    }
 
     // RFC says this response cannot even contain the `Content-Length` header.
     if (impl.result() == http::status::no_content) {
@@ -154,12 +158,12 @@ http::message_generator server::make_content_too_large_response(unsigned int ver
                                                                 http::verb method) const {
     const json::object body{{"error", json::object{{"message", "Request body too large"}}}};
 
-    response resp(version, false);
+    response resp(version);
     resp.json(http::status::payload_too_large, json::serialize(body));
     if (rejection_response_hook_) {
         rejection_response_hook_(resp);
     }
-    return detail::prepare_response(method, resp);
+    return detail::prepare_response(true, method, resp);
 }
 
 void server::listen_and_serve(const std::string& addr, std::uint16_t port) {
@@ -397,7 +401,9 @@ asio::awaitable<http::message_generator> server::handle_request(
         fwk_resp.json(http::status::internal_server_error, json::serialize(body));
     }
 
-    co_return detail::prepare_response(method, fwk_resp);
+    // The session closes after this response once a stop is requested; tell the peer so
+    // it does not send another request on this connection.
+    co_return detail::prepare_response(stop_source_.stop_requested(), method, fwk_resp);
 }
 
 // static

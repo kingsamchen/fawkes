@@ -32,6 +32,10 @@ public:
     explicit response(impl_type&& resp_impl) noexcept
         : impl_(std::move(resp_impl)) {}
 
+    explicit response(unsigned int version) {
+        impl_.version(version);
+    }
+
     response(unsigned int version, bool keep_alive) {
         impl_.version(version);
         impl_.keep_alive(keep_alive);
