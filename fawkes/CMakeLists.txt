@@ -117,3 +117,12 @@ target_precompile_headers(fawkes_tests
 )
 
 add_test(NAME FawkesTests COMMAND fawkes_tests)
+
+#
+# End-to-End
+# Only available on Unix-like platforms to reduce complexity.
+#
+
+if(UNIX)
+  add_subdirectory(e2e_tests)
+endif()
