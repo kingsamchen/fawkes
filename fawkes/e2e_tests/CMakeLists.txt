@@ -32,14 +32,25 @@ target_precompile_headers(fawkes_test_server
     fawkes::pch
 )
 
-add_test(NAME fawkes_e2e.server_stop
-  COMMAND
-  ${Python3_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/test_server_stop.py
-  --server $<TARGET_FILE:fawkes_test_server>
+set(FAWKES_E2E_TEST_SUITES
+  server_context
+  server_stop
+  server_transport
+  server_timeout
+  server_write
+  server_workers
 )
 
-set_tests_properties(fawkes_e2e.server_stop
-  PROPERTIES
-    LABELS "fawkes_e2e"
-    TIMEOUT 120
-)
+foreach(suite IN LISTS FAWKES_E2E_TEST_SUITES)
+  add_test(NAME fawkes_e2e.${suite}
+    COMMAND
+    ${Python3_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/test_${suite}.py
+    --server $<TARGET_FILE:fawkes_test_server>
+  )
+
+  set_tests_properties(fawkes_e2e.${suite}
+    PROPERTIES
+      LABELS "fawkes_e2e"
+      TIMEOUT 120
+  )
+endforeach()
