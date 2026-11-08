@@ -1,6 +1,7 @@
 """Own a standalone fawkes test server and report child-process failures."""
 
 import contextlib
+from collections import Counter
 import http.client
 import json
 import os
@@ -20,6 +21,11 @@ class ServerProcess:
         self.log_path = log_path
         self.events = bytearray()
         self.stop_sent = False
+        self.expected_request_errors = Counter()
+
+    def expect_request_error(self, message):
+        self.expected_request_errors[
+            f"Unexpected exception for the request; what={message}"] += 1
 
     def failure(self, message):
         log = self.log_path.read_text(errors="replace")
@@ -60,19 +66,54 @@ class ServerProcess:
             response = conn.getresponse()
             return response.status, response.read()
 
+    def expect_closed(self, connection):
+        try:
+            data = connection.recv(1)
+        except ConnectionResetError:
+            return
+        if data:
+            raise self.failure(f"Expected connection closure, received {data!r}")
+
     def stop(self):
         if not self.stop_sent and self.process.poll() is None:
             self.process.terminate()
             self.stop_sent = True
+
+    def wait_stopping(self):
+        self.wait_event("stopping")
+        try:
+            with self.connect():
+                pass
+        except ConnectionRefusedError:
+            return
+        raise self.failure("Server still accepts connections after stop()")
 
     def check_exit(self, code):
         if code != 0:
             raise self.failure(f"Server exited with code {code}")
         log = self.log_path.read_text(errors="replace")
         for marker in ("AddressSanitizer", "LeakSanitizer",
-                       "ThreadSanitizer", "runtime error:"):
+                       "ThreadSanitizer", "runtime error:",
+                       "Unhandled error for session;",
+                       "Unhandled error for no-fail;",
+                       "Unhandled exception from io_thread;",
+                       "Unexpected unknown exception for the request;"):
             if marker in log:
                 raise self.failure(f"Server reported {marker}")
+        observed = Counter()
+        prefix = "[error] [server.cpp] "
+        for line in log.splitlines():
+            if "Unexpected exception for the request;" not in line:
+                continue
+            if not line.startswith(prefix):
+                raise self.failure("Unexpected request error source or level")
+            observed[line[len(prefix):]] += 1
+        if observed != self.expected_request_errors:
+            unexpected = observed - self.expected_request_errors
+            missing = self.expected_request_errors - observed
+            raise self.failure(
+                f"Unexpected request errors: {dict(unexpected)}; "
+                f"missing expected request errors: {dict(missing)}")
 
     def wait_for_exit(self):
         try:
@@ -83,7 +124,7 @@ class ServerProcess:
 
 
 @contextlib.contextmanager
-def running_server(binary):
+def running_server(binary, **server_options):
     # Fail on a bind collision; never connect a test to an existing service.
     with socket.socket() as reservation:
         reservation.bind(("127.0.0.1", 0))
@@ -101,8 +142,10 @@ def running_server(binary):
     with tempfile.TemporaryDirectory(prefix="fawkes-e2e-") as directory:
         log_path = Path(directory) / "server.stderr"
         with log_path.open("wb") as stderr:
+            arguments = [f"--{name}={str(value).lower()}"
+                         for name, value in server_options.items()]
             process = subprocess.Popen(
-                [str(binary), f"--port={port}"],
+                [str(binary), f"--port={port}", *arguments],
                 stdout=subprocess.PIPE, stderr=stderr, bufsize=0, env=environment)
             server = ServerProcess(process, port, log_path)
             try:

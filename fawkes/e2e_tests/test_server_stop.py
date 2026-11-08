@@ -4,6 +4,8 @@ import argparse
 import contextlib
 import http.client
 from pathlib import Path
+import select
+import subprocess
 import sys
 import unittest
 
@@ -13,7 +15,7 @@ from server_process import running_server
 class ServerStopTest(unittest.TestCase):
     server_binary = None
 
-    # Sequential requests on one connection → ping and echo both succeed.
+    # GET/HEAD/GET then echo on one connection → no stray HEAD body bytes.
     def test_keep_alive_and_echo(self):
         with running_server(self.server_binary) as server:
             with contextlib.closing(http.client.HTTPConnection(
@@ -24,6 +26,16 @@ class ServerStopTest(unittest.TestCase):
                 self.assertEqual(response.read(), b"Pong!")
                 self.assertFalse(response.will_close)
                 first_socket = connection.sock
+
+                for method in ("HEAD", "GET"):
+                    connection.request(method, "/ping")
+                    self.assertIs(connection.sock, first_socket)
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(response.getheader("Content-Length"), "5")
+                    self.assertEqual(response.read(),
+                                     b"" if method == "HEAD" else b"Pong!")
+                    self.assertFalse(response.will_close)
 
                 connection.request("POST", "/echo", body=b"payload",
                                    headers={"Connection": "close"})
@@ -52,6 +64,7 @@ class ServerStopTest(unittest.TestCase):
                 # A later request on the same IO worker acts as a barrier.
                 self.assertEqual(server.ping(), (200, b"Pong!"))
                 server.stop()
+                server.wait_stopping()
                 try:
                     closed = connection.recv(1) == b""
                 except ConnectionResetError:
@@ -71,6 +84,7 @@ class ServerStopTest(unittest.TestCase):
                 self.assertFalse(response.will_close)
                 self.assertEqual(server.ping(), (200, b"Pong!"))
                 server.stop()
+                server.wait_stopping()
                 self.assertEqual(connection.sock.recv(1), b"")
                 server.wait_for_exit()
 
@@ -83,7 +97,7 @@ class ServerStopTest(unittest.TestCase):
                      f"Connection: {policy}\r\n\r\n").encode())
                 server.wait_event(event)
                 server.stop()
-                server.wait_event("stopping")
+                server.wait_stopping()
                 response = http.client.HTTPResponse(connection)
                 response.begin()
                 self.assertEqual(response.status, 200)
@@ -95,6 +109,28 @@ class ServerStopTest(unittest.TestCase):
     # Stop during a handler → finish its response and close the connection.
     def test_active_request_finishes_before_shutdown(self):
         self.assert_request_finishes_after_stop("/active", "handling", True)
+
+    # Stop during an awaitable handler → wait, then send a closing reply.
+    def test_awaitable_handler_finishes_before_shutdown(self):
+        with (running_server(self.server_binary, hold_ms=1000) as server,
+              server.connect() as connection):
+            connection.sendall(b"GET /wait HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            server.wait_event("holding")
+            self.assertEqual(server.ping(), (200, b"Pong!"))
+            server.stop()
+            server.wait_stopping()
+            with self.assertRaises(subprocess.TimeoutExpired):
+                server.process.wait(timeout=.2)
+            self.assertFalse(select.select([connection], [], [], 0)[0],
+                             "Stop discarded the in-flight handler")
+            server.wait_event("handled")
+            with http.client.HTTPResponse(connection) as response:
+                response.begin()
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.read(), b"finished")
+                self.assertTrue(response.will_close)
+            server.expect_closed(connection)
+            server.wait_for_exit()
 
     # Cancel queued behind write completion → finish safely, with no ASan UAF.
     def test_queued_stop_after_session_exit(self):
