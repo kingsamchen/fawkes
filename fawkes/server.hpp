@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <functional>
@@ -78,17 +79,21 @@ public:
             return min > 0ms ? min : max;
         }
 
-        // Default request body limit is 1MB.
-        static constexpr std::size_t default_body_limit = 0U;
         static constexpr std::size_t no_body_limit = std::numeric_limits<std::size_t>::max();
+        static constexpr std::uint32_t no_header_limit = std::numeric_limits<std::uint32_t>::max();
 
-        // Size in bytes.
-        std::size_t request_body_limit{options::default_body_limit};
+        // Size in bytes. If unset, use Beast's default (1 MiB). Use `no_body_limit` to disable
+        // the body limit; zero rejects nonempty bodies.
+        std::optional<std::size_t> request_body_limit;
 
-        // Delay before closing a connection rejected by the request body limit.
-        // Closing with unread request data makes the kernel send a RST, which can
-        // discard the error response; the delay gives the peer a best-effort
-        // chance to read it first. If zero or negative, close immediately.
+        // Size in bytes, including the request line and header delimiters. If unset, use Beast's
+        // default (8 KiB). Use `no_header_limit` for the largest header limit Beast supports.
+        std::optional<std::uint32_t> request_header_limit;
+
+        // Delay before closing a connection rejected during request parsing.
+        // Closing with unread request data makes the kernel send a RST, which can discard the
+        // error response; the delay gives the peer a best-effort chance to read it first.
+        // If zero or negative, close immediately.
         std::chrono::milliseconds rst_avoidance_delay{500};
     };
 

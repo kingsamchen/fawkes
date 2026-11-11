@@ -68,6 +68,108 @@ class TransportTest(unittest.TestCase):
                                 server, limit, framing, size)
                 self.assertEqual(server.ping(), (200, b"Pong!"))
 
+    # Default/custom header boundaries → ping or framework 431.
+    def test_header_boundaries(self):
+        prefix = (b"GET /ping HTTP/1.1\r\nHost: localhost\r\n"
+                  b"Connection: close\r\nX-Probe: ")
+        for configured, limit in ((0, 8192), (256, 256), (65536, 65536)):
+            with running_server(self.server_binary,
+                                header_limit=configured) as server:
+                for size in (limit - 1, limit, limit + 1):
+                    with (self.subTest(limit=limit, size=size),
+                          server.connect() as connection):
+                        connection.sendall(
+                            prefix + b"x" * (size - len(prefix) - 4) +
+                            b"\r\n\r\n")
+                        with http.client.HTTPResponse(connection) as response:
+                            response.begin()
+                            if size > limit:
+                                self.assert_rejection(
+                                    response, 431, "Request header too large")
+                            else:
+                                self.assertEqual(response.status, 200)
+                                self.assertEqual(response.read(), b"Pong!")
+                                self.assertTrue(response.will_close)
+                        server.expect_closed(connection)
+                self.assertEqual(server.ping(), (200, b"Pong!"))
+
+    # The maximum 32-bit header limit → accept headers beyond 64 KiB.
+    def test_unlimited_header(self):
+        with (running_server(self.server_binary,
+                             header_limit=(1 << 32) - 1) as server,
+              server.connect() as connection):
+            connection.sendall(
+                b"GET /ping HTTP/1.1\r\nHost: localhost\r\n"
+                b"Connection: close\r\nX-Probe-1: " + b"x" * 32768 +
+                b"\r\nX-Probe-2: " + b"x" * 32768 +
+                b"\r\n\r\n")
+            with http.client.HTTPResponse(connection) as response:
+                response.begin()
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.read(), b"Pong!")
+            server.expect_closed(connection)
+
+    # A disabled body limit → accept payloads above Beast's request default.
+    def test_unlimited_body(self):
+        with running_server(self.server_binary,
+                            body_limit=(1 << 64) - 1) as server:
+            for framing in ("content-length", "chunked"):
+                with self.subTest(framing=framing):
+                    self.assert_body_boundary(
+                        server, (1 << 64) - 1, framing, 1024 * 1024 + 1)
+
+    # Header limits in initial/header/trailer reads → 431, hook, and closure.
+    def test_header_limit_rejection_hook(self):
+        start = b"GET /ping HTTP/1.1\r\nHost: localhost\r\n"
+        for limit, hook in ((8192, False), (8192, True),
+                            (256, False), (256, True)):
+            fields = b"X-Probe: " + b"x" * limit + b"\r\n\r\n"
+            cases = {
+                "combined": [start + fields],
+                "header": [start, fields],
+                "request_line": [b"GET /" + b"x" * limit +
+                                 b" HTTP/1.1\r\nHost: localhost\r\n\r\n"],
+                "trailers": [b"POST /echo HTTP/1.1\r\nHost: localhost\r\n"
+                             b"Transfer-Encoding: chunked\r\n\r\n",
+                             b"0\r\n" + fields],
+            }
+            with (self.subTest(limit=limit, hook=hook),
+                  running_server(self.server_binary,
+                                 header_limit=limit,
+                                 rejection_hook=hook) as server):
+                for stage, parts in cases.items():
+                    with (self.subTest(stage=stage),
+                          server.connect() as connection):
+                        for index, part in enumerate(parts):
+                            if index:
+                                self.assertEqual(server.ping(), (200, b"Pong!"))
+                            connection.sendall(part)
+                        with http.client.HTTPResponse(connection) as response:
+                            response.begin()
+                            self.assert_rejection(
+                                response, 431, "Request header too large", hook)
+                        server.expect_closed(connection)
+                self.assertEqual(server.ping(), (200, b"Pong!"))
+
+    # An oversized HEAD header → a 431 with JSON metadata and no wire body.
+    def test_header_limit_head(self):
+        with (running_server(self.server_binary, rejection_hook=True) as server,
+              server.connect() as connection):
+            connection.sendall(
+                b"HEAD /ping HTTP/1.1\r\nHost: localhost\r\nX-Probe: " +
+                b"x" * 8192 + b"\r\n\r\n")
+            with http.client.HTTPResponse(connection, method="HEAD") as response:
+                response.begin()
+                self.assertEqual(response.status, 431)
+                self.assertEqual(response.read(), b"")
+                self.assertEqual(response.getheader("Content-Type"),
+                                 "application/json")
+                self.assertEqual(response.getheader("X-Fawkes-Test-Rejection"),
+                                 "applied")
+                self.assertGreater(int(response.getheader("Content-Length")), 0)
+                self.assertTrue(response.will_close)
+            server.expect_closed(connection)
+
     # Invalid URL parsing before dispatch → framework 400 and optional hook.
     def test_invalid_target_rejection_hook(self):
         for hook in (False, True):
