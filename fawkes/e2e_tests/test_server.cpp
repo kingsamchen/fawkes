@@ -13,6 +13,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <semaphore>
 #include <stdexcept>
 #include <string>
@@ -61,6 +62,9 @@ DEFINE_int32(serve_timeout_ms, 0, "Request serve timeout in milliseconds");
 DEFINE_uint64(body_limit,
               0,
               "Request body limit; zero uses the framework default");
+DEFINE_uint32(header_limit,
+              0,
+              "Request header limit; zero uses the framework default");
 DEFINE_int32(rst_avoidance_delay_ms,
              500,
              "Rejection close delay in milliseconds");
@@ -306,7 +310,13 @@ int main(int argc, char* argv[]) {
             .idle_timeout = std::chrono::milliseconds(FLAGS_idle_timeout_ms),
             .read_timeout = std::chrono::milliseconds(FLAGS_read_timeout_ms),
             .serve_timeout = std::chrono::milliseconds(FLAGS_serve_timeout_ms),
-            .request_body_limit = static_cast<std::size_t>(FLAGS_body_limit),
+            .request_body_limit =
+                FLAGS_body_limit == 0
+                    ? std::nullopt
+                    : std::make_optional(static_cast<std::size_t>(FLAGS_body_limit)),
+            .request_header_limit = FLAGS_header_limit == 0
+                                        ? std::nullopt
+                                        : std::make_optional(FLAGS_header_limit),
             .rst_avoidance_delay =
                 std::chrono::milliseconds(FLAGS_rst_avoidance_delay_ms),
         });

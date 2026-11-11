@@ -5,6 +5,7 @@
 #include "fawkes/server.hpp"
 
 #include <chrono>
+#include <cstdint>
 #include <exception>
 #include <expected>
 #include <functional>
@@ -97,15 +98,18 @@ std::string_view safe_request_content_length(const http::request<http::string_bo
     return raw;
 }
 
-void set_body_limit(http::request_parser<http::string_body>& parser, const server::options& opts) {
-    if (opts.request_body_limit == server::options::default_body_limit) {
-        return;
+void set_parser_limits(http::request_parser<http::string_body>& parser,
+                       const server::options& opts) {
+    if (opts.request_body_limit.has_value()) {
+        if (*opts.request_body_limit == server::options::no_body_limit) {
+            parser.body_limit(boost::none);
+        } else {
+            parser.body_limit(*opts.request_body_limit);
+        }
     }
 
-    if (opts.request_body_limit != server::options::no_body_limit) {
-        parser.body_limit(opts.request_body_limit);
-    } else {
-        parser.body_limit(boost::none);
+    if (opts.request_header_limit.has_value()) {
+        parser.header_limit(*opts.request_header_limit);
     }
 }
 
@@ -198,6 +202,16 @@ std::optional<http::message_generator> server::make_rejection_response(
         }
         return detail::prepare_response(true, method, resp);
     };
+
+    if (ec == http::error::header_limit) {
+        SPDLOG_ERROR("Failed to serve the request because header limit exceeded; method={} "
+                     "target={} remote={}",
+                     req.method_string(),
+                     req.target(),
+                     fmt::streamed(info.remote));
+        return build_resp(http::status::request_header_fields_too_large,
+                          "Request header too large");
+    }
 
     if (ec == http::error::body_limit) {
         SPDLOG_ERROR("Failed to serve the request because body limit exceeded; method={} "
@@ -302,12 +316,10 @@ asio::awaitable<void> server::serve_session(beast::tcp_stream stream,
     beast::flat_buffer buf;
     const auto read_timeout = opts_.effective_read_timeout();
 
-    // TODO(KC): handle http async_read/async_write exception ?
-    // can stream still be usable in this case?
     bool need_rst_avoidance = false;
     for (; !stop_token.stop_requested();) {
         http::request_parser<http::string_body> parser;
-        set_body_limit(parser, opts_);
+        set_parser_limits(parser, opts_);
 
         if (opts_.idle_timeout > 0ms) {
             stream.expires_after(opts_.idle_timeout);
