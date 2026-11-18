@@ -14,6 +14,11 @@ target_compile_definitions(Boost::asio
     $<$<BOOL:${WIN32}>:_WIN32_WINNT=0x0601>
 
     BOOST_ASIO_NO_DEPRECATED=1
+
+    $<$<IN_LIST:ASAN,$<UPPER_CASE:${FAWKES_USE_SANITIZERS}>>:
+      BOOST_ASIO_DISABLE_AWAITABLE_FRAME_RECYCLING
+      BOOST_ASIO_DISABLE_SMALL_BLOCK_RECYCLING
+    >
 )
 
 # Work around MSVC false-positive unreachable-code warnings in fmt 12.2.0.
