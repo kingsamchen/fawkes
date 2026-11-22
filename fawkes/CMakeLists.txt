@@ -18,6 +18,7 @@ target_sources(fawkes
     query_params.hpp
     request.cpp
     request.hpp
+    request_context.hpp
     response.cpp
     response.hpp
     router.cpp
@@ -83,6 +84,7 @@ target_sources(fawkes_tests
 
     cookie_test.cpp
     middlewares/cors_test.cpp
+    request_context_test.cpp
     request_test.cpp
     router_test.cpp
     server_options_test.cpp

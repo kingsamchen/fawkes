@@ -3,6 +3,7 @@
 // in the LICENSE file.
 
 #include <algorithm>
+#include <concepts>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -191,6 +192,36 @@ TEST_CASE("Path parameters still work after copy from a request") {
 
     CHECK_EQ(req_cp.params().get("type"), "test");
     CHECK_EQ(req_cp.params().get("id"), "42");
+}
+
+TEST_CASE("Context access preserves constness and request copies own their state") {
+    struct state_base {
+        int value = 0;
+    };
+
+    struct request_state : state_base {
+        using base_type = state_base;
+    };
+
+    fawkes::request req;
+    const auto& const_req = req;
+    static_assert(std::same_as<fawkes::request::context_type, fawkes::request_context>);
+    static_assert(std::same_as<decltype(req.context()), fawkes::request_context&>);
+    static_assert(std::same_as<decltype(const_req.context()), const fawkes::request_context&>);
+    static_assert(std::same_as<decltype(const_req.context().as<request_state>()),
+                               const request_state&>);
+
+    CHECK_EQ(req.context().as_if<request_state>(), nullptr);
+    auto& state = req.context().emplace<request_state>();
+    state.value = 42;
+    CHECK_EQ(&req.context().as_base<state_base>(), static_cast<request_state::base_type*>(&state));
+    CHECK_EQ(const_req.context().as_if<request_state>(), &state);
+    CHECK_EQ(const_req.context().as_base<state_base>().value, 42);
+
+    auto copy = req;
+    copy.context().as_base<state_base>().value = 43;
+    CHECK_EQ(copy.context().as<request_state>().value, 43);
+    CHECK_EQ(req.context().as<request_state>().value, 42);
 }
 
 TEST_SUITE_END(); // HTTP Request
