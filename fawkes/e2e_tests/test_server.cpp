@@ -136,9 +136,13 @@ asio::awaitable<void> release_workers(worker_gate& gate,
     co_return;
 }
 
-struct context_value {
+struct context_base {
     std::string marker;
     std::string request_id;
+};
+
+struct context_value : context_base {
+    using base_type = context_base;
 };
 
 struct context_gate {
@@ -174,10 +178,9 @@ void write_context_response(const fawkes::request& request,
         {"request_id", request.header()[request_id_header]},
         {"body", request.body()},
         {"context", nullptr}};
-    if (request.context().has_value()) {
-        const auto& context = request.context_as<context_value>();
-        body["context"] = json::object{{"marker", context.marker},
-                                       {"request_id", context.request_id}};
+    if (const auto* context = request.context().as_base_if<context_base>()) {
+        body["context"] = json::object{{"marker", context->marker},
+                                       {"request_id", context->request_id}};
     }
     response.json(status, json::serialize(body));
 }
@@ -187,15 +190,15 @@ struct context_probe {
 
     asio::awaitable<fawkes::middleware_result> pre_handle(
         fawkes::request& request, fawkes::response& response) const {
-        if (request.context().has_value()) {
+        if (request.context().as_if<context_value>() != nullptr) {
             throw std::logic_error("Request arrived with stale context");
         }
         const auto marker = request.header()["X-Test-Marker"];
         if (!marker.empty()) {
-            request.context() = context_value{
-                .marker = std::string(marker),
-                .request_id =
-                    std::string(request.header()[request_id_header])};
+            context_value value;
+            value.marker = std::string(marker);
+            value.request_id = std::string(request.header()[request_id_header]);
+            request.context().emplace<context_value>(std::move(value));
         }
         co_await gate.get().wait(request);
         if (request.header()["X-Test-Mode"] == "abort") {
@@ -216,13 +219,13 @@ struct context_probe {
         if (!request_id.empty()) {
             response.header().set("X-Test-Header-Request-Id", request_id);
         }
-        const bool has_context = request.context().has_value();
+        const auto* context = request.context().as_base_if<context_base>();
+        const bool has_context = context != nullptr;
         response.header().set("X-Test-Has-Context", has_context ? "true" : "false");
         if (has_context) {
-            const auto& context = request.context_as<context_value>();
-            response.header().set("X-Test-Context-Marker", context.marker);
-            if (!context.request_id.empty()) {
-                response.header().set("X-Test-Context-Request-Id", context.request_id);
+            response.header().set("X-Test-Context-Marker", context->marker);
+            if (!context->request_id.empty()) {
+                response.header().set("X-Test-Context-Request-Id", context->request_id);
             }
         }
         return fawkes::middleware_result::proceed;

@@ -19,6 +19,7 @@
 #include "fawkes/cookie.hpp"
 #include "fawkes/path_params.hpp"
 #include "fawkes/query_params.hpp"
+#include "fawkes/request_context.hpp"
 
 namespace fawkes {
 
@@ -35,6 +36,8 @@ class request {
 public:
     using impl_type = http::request<http::string_body>;
     using header_type = impl_type::header_type;
+
+    using context_type = request_context;
 
     request() = default;
 
@@ -106,27 +109,11 @@ public:
         return conn_info_.remote;
     }
 
-    // Throws `std::bad_any_cast` if `T` does not match the type of the managed
-    // content, or the `ctx_` does not have a value.
-    template<typename T>
-    requires(!std::is_reference_v<T>)
-    [[nodiscard]] T& context_as() {
-        return std::any_cast<T&>(ctx_);
-    }
-
-    // Throws `std::bad_any_cast` if `T` does not match the type of the managed
-    // content, or the `ctx_` does not have a value.
-    template<typename T>
-    requires(!std::is_reference_v<T>)
-    [[nodiscard]] const T& context_as() const {
-        return std::any_cast<const T&>(ctx_);
-    }
-
-    [[nodiscard]] std::any& context() noexcept {
+    [[nodiscard]] context_type& context() noexcept {
         return ctx_;
     }
 
-    [[nodiscard]] const std::any& context() const noexcept {
+    [[nodiscard]] const context_type& context() const noexcept {
         return ctx_;
     }
 
@@ -144,7 +131,7 @@ private:
     urls::url url_;
     std::string path_; // Percent-decoded.
     path_params ps_;
-    std::any ctx_;
+    context_type ctx_;
 };
 
 static_assert(std::is_nothrow_move_constructible_v<request> &&
